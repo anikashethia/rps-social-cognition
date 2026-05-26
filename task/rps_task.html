@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPS Social Cognition Task</title>
+
+<script src="https://unpkg.com/jspsych@7.3.4"></script>
+<script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.3"></script>
+<link rel="stylesheet" href="https://unpkg.com/jspsych@7.3.4/css/jspsych.css">
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0f1117;
+    --surface:  #181c27;
+    --border:   #2a2f3d;
+    --text:     #e8eaf0;
+    --dim:      #7b82a0;
+    --win:      #3dffa0;
+    --lose:     #ff4d6d;
+    --draw:     #ffd166;
+    --accent:   #6c8eff;
+    --rock:     #c0a882;
+    --paper:    #a8c4e0;
+    --scissors: #e0a8b8;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; }
+
+  .jspsych-display-element {
+    background: var(--bg) !important;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .jspsych-content-wrapper { width: 100%; max-width: 760px; padding: 40px 20px; }
+  .jspsych-content { width: 100%; }
+
+  /* ── Screens ── */
+  .screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    min-height: 480px;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  /* ── Typography ── */
+  .tag {
+    font-size: 10px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .body-text {
+    font-size: 15px;
+    line-height: 1.9;
+    color: var(--dim);
+    max-width: 520px;
+  }
+
+  .body-text strong { color: var(--text); }
+
+  .hint {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+
+  /* ── Rules grid ── */
+  .rules-grid {
+    display: flex;
+    gap: 14px;
+  }
+
+  .rule-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 14px;
+    background: var(--surface);
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--dim);
+    line-height: 2;
+    width: 120px;
+  }
+
+  .rule-card .icon { font-size: 26px; margin-bottom: 6px; }
+
+  /* ── Points row ── */
+  .pts-row { display: flex; gap: 36px; }
+  .pts-item { text-align: center; }
+  .pts-val { font-size: 22px; margin-bottom: 4px; }
+  .pts-val.pos { color: var(--win); }
+  .pts-val.neg { color: var(--lose); }
+  .pts-val.zero { color: var(--draw); }
+  .pts-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 3px; color: var(--dim); }
+
+  /* ── Avatar ── */
+  .avatar {
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 46px;
+    overflow: hidden;
+  }
+
+  .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+  .agent-name { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: var(--dim); }
+
+  /* ── Progress ── */
+  .progress-wrap { width: 280px; }
+  .progress-bar { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); }
+  .progress-label { font-size: 10px; letter-spacing: 3px; color: var(--dim); margin-top: 6px; text-align: right; }
+
+  /* ── Fixation ── */
+  .fixation { font-size: 56px; color: var(--dim); font-weight: 100; }
+
+  /* ── Choice ── */
+  .choice-prompt { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--dim); }
+
+  .choice-row { display: flex; gap: 14px; }
+
+  .choice-btn {
+    width: 118px; height: 118px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+
+  .choice-btn:hover { border-color: var(--accent); transform: translateY(-3px); }
+  .choice-btn .ci { font-size: 30px; }
+  .choice-btn .cn { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--dim); }
+  .choice-btn .ck { font-size: 10px; color: var(--border); border: 1px solid var(--border); padding: 1px 5px; border-radius: 2px; }
+
+  /* ── Feedback ── */
+  .vs-row { display: flex; align-items: center; gap: 28px; }
+  .vs-side { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .vs-who { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--dim); }
+  .vs-sep { font-size: 18px; color: var(--border); }
+
+  .pill {
+    padding: 10px 18px;
+    border-radius: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 13px; letter-spacing: 2px;
+  }
+
+  .pill.rock     { border-color: var(--rock);     color: var(--rock); }
+  .pill.paper    { border-color: var(--paper);    color: var(--paper); }
+  .pill.scissors { border-color: var(--scissors); color: var(--scissors); }
+
+  .outcome-badge {
+    font-size: 38px; font-weight: bold;
+    letter-spacing: 6px; text-transform: uppercase;
+  }
+  .outcome-badge.win  { color: var(--win); }
+  .outcome-badge.lose { color: var(--lose); }
+  .outcome-badge.draw { color: var(--draw); }
+
+  .delta { font-size: 20px; letter-spacing: 3px; }
+  .delta.pos { color: var(--win); }
+  .delta.neg { color: var(--lose); }
+  .delta.zero { color: var(--draw); }
+
+  .total-line {
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--dim); border-top: 1px solid var(--border);
+    padding-top: 14px; width: 220px; text-align: center;
+  }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed; top: 18px; right: 24px;
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--dim); text-align: right; line-height: 2;
+    pointer-events: none; z-index: 999;
+    display: none;
+  }
+
+  #hud-pts { font-size: 17px; color: var(--text); letter-spacing: 2px; }
+
+  /* ── End ── */
+  .final-score { font-size: 68px; letter-spacing: 4px; color: var(--win); }
+</style>
+</head>
+<body>
+<script>
+// ══════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════
+const CFG = {
+  OPPONENT_DISPLAY_MS: 800,
+  FEEDBACK_MS:         1500,
+  ITI_MIN_MS:          400,
+  ITI_MAX_MS:          1500,
+  RESPONSE_TIMEOUT_MS: 5000,
+  N_TRIALS_PER_BLOCK:  35,
+  N_PRACTICE_TRIALS:   5,
+  AGENTS: ["agent_a","agent_b","agent_c","agent_d","rng"],
+  POINTS_WIN: 3, POINTS_LOSE: -3, POINTS_DRAW: 0,
+  STARTING_POINTS: 100,
+  ACTIONS: [1,2,3],
+  LABELS:  {1:"Rock",   2:"Paper",   3:"Scissors"},
+  ICONS:   {1:"🪨",     2:"📄",      3:"✂️"},
+  CLASSES: {1:"rock",   2:"paper",   3:"scissors"},
+  KEYS:    {"1":1,      "2":2,       "3":3},
+  LEVEL:   {agent_a:1, agent_b:1, agent_c:1, agent_d:1, rng:0},
+  NOISE:   {agent_a:.3, agent_b:.3, agent_c:.3, agent_d:.3, rng:null},
+  NAMES:   {agent_a:"Agent A", agent_b:"Agent B", agent_c:"Agent C", agent_d:"Agent D", rng:"Random Draw"},
+  EMOJIS:  {agent_a:"🔵", agent_b:"🟢", agent_c:"🟠", agent_d:"🔴", rng:"🎲"},
+  AVATAR_PATHS: {},   // e.g. {agent_a: "stimuli/avatars/avatar_a.png"}
+};
+
+// ══════════════════════════════════════════
+//  OUTCOME
+// ══════════════════════════════════════════
+function outcome(p, a) {
+  if (p === a) return "draw";
+  if (p === (a % 3) + 1) return "win";
+  return "lose";
+}
+function pts(o) { return {win:CFG.POINTS_WIN, lose:CFG.POINTS_LOSE, draw:CFG.POINTS_DRAW}[o]; }
+
+// ══════════════════════════════════════════
+//  SEEDED RNG
+// ══════════════════════════════════════════
+function mkRng(seed) {
+  if (seed === null) return () => Math.random();
+  let s = seed;
+  return () => {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s>>>15, 1|s);
+    t = t + Math.imul(t ^ t>>>7, 61|t) ^ t;
+    return ((t ^ t>>>14) >>> 0) / 4294967296;
+  };
+}
+
+function weightedChoice(rng, probs) {
+  const r = rng(); let c = 0;
+  for (let i = 0; i < probs.length; i++) { c += probs[i]; if (r < c) return i; }
+  return probs.length - 1;
+}
+
+// ══════════════════════════════════════════
+//  AGENTS
+// ══════════════════════════════════════════
+class RandomAgent {
+  constructor(id, seed) { this.id=id; this.rng=mkRng(seed); this.oppHist=[]; }
+  choose()   { return CFG.ACTIONS[Math.floor(this.rng()*3)]; }
+  update(own,opp) { this.oppHist.push(opp); }
+  reset()    { this.oppHist=[]; }
+}
+
+class CHASEAgent {
+  constructor(id, {level=1,alpha=0.3,beta=3.0,noise=0.15,seed=null}={}) {
+    this.id=id; this.level=level; this.alpha=alpha; this.beta=beta; this.noise=noise;
+    this.rng=mkRng(seed); this.oppHist=[];
+    this.attr=[1/3,1/3,1/3];
+    this.payoff=[[0,-1,1],[1,0,-1],[-1,1,0]];
+  }
+  _softmax(v) {
+    const s=v.map(x=>this.beta*x), m=Math.max(...s);
+    const e=s.map(x=>Math.exp(x-m)), sum=e.reduce((a,b)=>a+b,0);
+    return e.map(x=>x/sum);
+  }
+  _l0()  { return this._softmax(this.attr); }
+  _br(op) {
+    const ev=this.payoff.map(row=>row.reduce((s,v,j)=>s+v*op[j],0));
+    return this._softmax(ev);
+  }
+  _probs() {
+    let p=this._l0();
+    for(let k=0;k<this.level;k++) p=this._br(p);
+    return p;
+  }
+  choose() {
+    const p=this._probs();
+    const idx = this.rng()<this.noise
+      ? Math.floor(this.rng()*3)
+      : weightedChoice(this.rng, p);
+    return CFG.ACTIONS[idx];
+  }
+  update(own,opp) {
+    this.oppHist.push(opp);
+    const idx=CFG.ACTIONS.indexOf(own);
+    this.attr=this.attr.map((a,i)=>a+this.alpha*((i===idx?1:0)-a));
+  }
+  reset() { this.oppHist=[]; this.attr=[1/3,1/3,1/3]; }
+}
+
+function buildAgent(id,seed=null) {
+  if(id==="rng") return new RandomAgent(id,seed);
+  return new CHASEAgent(id,{level:CFG.LEVEL[id],noise:CFG.NOISE[id],seed});
+}
+
+// ══════════════════════════════════════════
+//  COUNTERBALANCING
+// ══════════════════════════════════════════
+function blockOrder(pid, session) {
+  const n = parseInt(pid.replace(/\D/g,""),10)||0;
+  const off = (n + session - 1) % CFG.AGENTS.length;
+  return [...CFG.AGENTS.slice(off), ...CFG.AGENTS.slice(0,off)];
+}
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+const S = {
+  pid:"TEST001", session:1, seed:null,
+  nTrials:5,          // default low for testing
+  pts: 100,
+  order:[], block:0, agentId:null, agent:null,
+  trialN:0, allTrials:[],
+  lastTrial: null,    // stores last choice result for feedback
+};
+
+// ══════════════════════════════════════════
+//  AVATAR HTML
+// ══════════════════════════════════════════
+function avatarHTML(id, size=110) {
+  const path=CFG.AVATAR_PATHS[id];
+  const inner=path ? `<img src="${path}" alt="${id}">` : CFG.EMOJIS[id];
+  return `<div class="avatar" style="width:${size}px;height:${size}px">${inner}</div>`;
+}
+
+// ══════════════════════════════════════════
+//  HUD — inject into DOM now, before jsPsych touches anything
+// ══════════════════════════════════════════
+(function() {
+  const h = document.createElement('div');
+  h.id = 'hud';
+  h.innerHTML = '<div id="hud-agent"></div><div id="hud-block"></div><div id="hud-pts"></div>';
+  document.body.appendChild(h);
+})();
+
+function updateHUD() {
+  const hud = document.getElementById("hud");
+  if (!hud) return;
+  hud.style.display = "block";
+  document.getElementById("hud-agent").textContent = CFG.NAMES[S.agentId]||"";
+  document.getElementById("hud-block").textContent = `Block ${S.block} / ${CFG.AGENTS.length}`;
+  document.getElementById("hud-pts").textContent   = `${S.pts} pts`;
+}
+
+// ══════════════════════════════════════════
+//  JSPSYCH
+// ══════════════════════════════════════════
+const jsPsych = initJsPsych({
+  on_finish: () => {
+    document.getElementById("hud").style.display="none";
+    downloadCSV();
+  }
+});
+
+// ── Welcome ──
+const welcome = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `
+    <div class="screen">
+      <div class="tag">RPS · Social Cognition Task</div>
+      <div class="body-text">
+        Welcome to the next part of the study.<br><br>
+        You will now play <strong>Rock-Paper-Scissors</strong> against
+        each of the agents you interacted with earlier, plus a random draw.
+      </div>
+      <div class="hint">press any key to continue</div>
+    </div>`,
+  choices: "ALL_KEYS",
+};
+
+// ── Rules ──
+const rules = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `
+    <div class="screen">
+      <div class="tag">How to play</div>
+      <div class="rules-grid">
+        <div class="rule-card"><div class="icon">🪨</div>Rock<br>beats<br>Scissors</div>
+        <div class="rule-card"><div class="icon">✂️</div>Scissors<br>beats<br>Paper</div>
+        <div class="rule-card"><div class="icon">📄</div>Paper<br>beats<br>Rock</div>
+      </div>
+      <div class="body-text">Use keys <strong>1</strong>, <strong>2</strong>, <strong>3</strong> to choose.</div>
+      <div class="pts-row">
+        <div class="pts-item"><div class="pts-val pos">+3</div><div class="pts-lbl">Win</div></div>
+        <div class="pts-item"><div class="pts-val neg">−3</div><div class="pts-lbl">Lose</div></div>
+        <div class="pts-item"><div class="pts-val zero">0</div><div class="pts-lbl">Draw</div></div>
+      </div>
+      <div class="hint">press any key to begin</div>
+    </div>`,
+  choices: "ALL_KEYS",
+};
+
+// ── Block intro ──
+function makeBlockIntro(agentId, blockNum) {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: () => {
+      const pct = ((blockNum-1)/CFG.AGENTS.length*100).toFixed(0);
+      return `
+        <div class="screen">
+          <div class="tag">Block ${blockNum} of ${CFG.AGENTS.length}</div>
+          ${avatarHTML(agentId,100)}
+          <div class="agent-name">${CFG.NAMES[agentId]}</div>
+          <div class="body-text">
+            ${agentId==="rng"
+              ? "In this block there is <strong>no opponent</strong>.<br>A choice will be drawn randomly."
+              : `You will now play against <strong>${CFG.NAMES[agentId]}</strong>.`}
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="progress-label">${blockNum-1} / ${CFG.AGENTS.length} blocks done</div>
+          </div>
+          <div class="hint">press any key when ready</div>
+        </div>`;
+    },
+    choices: "ALL_KEYS",
+    on_start: () => {
+      S.agentId = agentId;
+      S.block   = blockNum;
+      S.agent   = buildAgent(agentId, S.seed);
+      updateHUD();
+    },
+  };
+}
+
+// ── Fixation ──
+function makeFixation() {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<div class="screen"><div class="fixation">+</div></div>`,
+    choices: "NO_KEYS",
+    trial_duration: () => CFG.ITI_MIN_MS + Math.random()*(CFG.ITI_MAX_MS-CFG.ITI_MIN_MS),
+  };
+}
+
+// ── Opponent display ──
+function makeOppDisplay(agentId) {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: () => `
+      <div class="screen">
+        ${avatarHTML(agentId)}
+        <div class="agent-name">${CFG.NAMES[agentId]}</div>
+      </div>`,
+    choices: "NO_KEYS",
+    trial_duration: CFG.OPPONENT_DISPLAY_MS,
+  };
+}
+
+// ── Choice ──
+function makeChoice(agentId, tNum, bNum, practice=false) {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: () => `
+      <div class="screen">
+        ${avatarHTML(agentId)}
+        <div class="agent-name">${CFG.NAMES[agentId]}</div>
+        <div class="choice-prompt">choose your move</div>
+        <div class="choice-row">
+          <button class="choice-btn"><span class="ci">🪨</span><span class="cn">Rock</span><span class="ck">1</span></button>
+          <button class="choice-btn"><span class="ci">📄</span><span class="cn">Paper</span><span class="ck">2</span></button>
+          <button class="choice-btn"><span class="ci">✂️</span><span class="cn">Scissors</span><span class="ck">3</span></button>
+        </div>
+      </div>`,
+    choices: ["1","2","3"],
+    trial_duration: CFG.RESPONSE_TIMEOUT_MS,
+    on_finish: (data) => {
+      if (!data.response) { S.lastTrial = null; return; }
+
+      const pChoice = CFG.KEYS[data.response];
+      const aChoice = S.agent.choose();
+      S.agent.update(aChoice, pChoice);
+
+      const o = outcome(pChoice, aChoice);
+      const d = pts(o);
+      if (!practice) S.pts += d;
+
+      S.lastTrial = { pChoice, aChoice, o, d };
+
+      if (!practice) {
+        S.allTrials.push({
+          participant_id:    S.pid,
+          session:           S.session,
+          block:             bNum,
+          agent:             agentId,
+          trial_in_block:    tNum,
+          trial_global:      ++S.trialN,
+          participant_choice: pChoice,
+          agent_choice:      aChoice,
+          outcome:           o,
+          points_delta:      d,
+          points_cumulative: S.pts,
+          rt:                data.rt,
+          timestamp:         Date.now(),
+        });
+        updateHUD();
+      }
+    },
+  };
+}
+
+// ── Feedback ──
+function makeFeedback() {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: () => {
+      const t = S.lastTrial;
+      if (!t) return `<div class="screen"><div style="color:var(--dim);letter-spacing:3px;font-size:14px;">TIME OUT</div></div>`;
+
+      const { pChoice:pc, aChoice:ac, o, d } = t;
+      const dc = d>0?"pos":d<0?"neg":"zero";
+      const ds = d>0?`+${d}`:`${d}`;
+      const ol = {win:"WIN",lose:"LOSE",draw:"DRAW"};
+
+      return `
+        <div class="screen">
+          <div class="vs-row">
+            <div class="vs-side">
+              <div class="vs-who">you</div>
+              <div class="pill ${CFG.CLASSES[pc]}">${CFG.ICONS[pc]} ${CFG.LABELS[pc]}</div>
+            </div>
+            <div class="vs-sep">vs</div>
+            <div class="vs-side">
+              <div class="vs-who">agent</div>
+              <div class="pill ${CFG.CLASSES[ac]}">${CFG.ICONS[ac]} ${CFG.LABELS[ac]}</div>
+            </div>
+          </div>
+          <div class="outcome-badge ${o}">${ol[o]}</div>
+          <div class="delta ${dc}">${ds} pts</div>
+          <div class="total-line">${S.pts} pts total</div>
+        </div>`;
+    },
+    choices: "NO_KEYS",
+    trial_duration: CFG.FEEDBACK_MS,
+  };
+}
+
+// ── Block trials ──
+function makeBlockTrials(agentId, bNum, nTrials, practice=false) {
+  const out = [];
+  for (let t=0; t<nTrials; t++) {
+    out.push(makeFixation());
+    out.push(makeOppDisplay(agentId));
+    out.push(makeChoice(agentId, t+1, bNum, practice));
+    out.push(makeFeedback());
+  }
+  return out;
+}
+
+// ── End ──
+const endTrial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: () => `
+    <div class="screen">
+      <div class="tag">Task complete</div>
+      <div class="final-score">${S.pts}</div>
+      <div class="hint" style="margin-top:-12px;">total points</div>
+      <div class="body-text">Thank you for participating!<br>Your data is being saved.</div>
+      <div class="hint">press any key to finish</div>
+    </div>`,
+  choices: "ALL_KEYS",
+  on_start: () => { document.getElementById("hud").style.display="none"; },
+};
+
+// ══════════════════════════════════════════
+//  BUILD & RUN
+// ══════════════════════════════════════════
+function buildAndRun(pid, session, nTrials, seed, practice) {
+  S.pid=pid; S.session=session; S.nTrials=nTrials; S.seed=seed;
+  S.pts=CFG.STARTING_POINTS; S.trialN=0; S.allTrials=[];
+  S.order = blockOrder(pid, session);
+
+  const timeline = [welcome, rules];
+
+  if (practice) {
+    timeline.push({
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: `
+        <div class="screen">
+          <div class="tag">Practice round</div>
+          <div class="body-text">A short practice — points won't count.<br>Get familiar with the keys.</div>
+          <div class="hint">press any key to begin</div>
+        </div>`,
+      choices: "ALL_KEYS",
+      on_start: () => {
+        S.agentId="rng"; S.block=0;
+        S.agent=buildAgent("rng",seed);
+      },
+    });
+    timeline.push(...makeBlockTrials("rng", 0, CFG.N_PRACTICE_TRIALS, true));
+  }
+
+  S.order.forEach((agentId, i) => {
+    timeline.push(makeBlockIntro(agentId, i+1));
+    timeline.push(...makeBlockTrials(agentId, i+1, nTrials));
+  });
+
+  timeline.push(endTrial);
+  jsPsych.run(timeline);
+}
+
+// ══════════════════════════════════════════
+//  CSV EXPORT
+// ══════════════════════════════════════════
+function downloadCSV() {
+  if (!S.allTrials.length) return;
+  const cols = ["participant_id","session","block","agent","trial_in_block","trial_global",
+    "participant_choice","agent_choice","outcome","points_delta","points_cumulative","rt","timestamp"];
+  const rows = S.allTrials.map(t => cols.map(c => t[c]??'').join(','));
+  const csv  = [cols.join(','), ...rows].join('\n');
+  const a    = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+    download: `${S.pid}_session${S.session}_rps.csv`
+  });
+  a.click();
+}
+
+// ══════════════════════════════════════════
+//  ENTRY — URL PARAMS
+// ══════════════════════════════════════════
+const p = new URLSearchParams(window.location.search);
+buildAndRun(
+  p.get("pid")      || "TEST001",
+  parseInt(p.get("session") || "1"),
+  parseInt(p.get("trials")  || "5"),   // 5 trials/block for fast testing; use 35 for real run
+  p.get("seed") ? parseInt(p.get("seed")) : null,
+  p.get("practice") === "1"
+);
+</script>
+</body>
+</html>
