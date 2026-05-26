@@ -1,261 +1,159 @@
 # RPS Social Cognition Task
 
-A Rock-Paper-Scissors (RPS) task designed to measure **theory of mind (ToM) toward AI agents** as part of a larger study on social connection and mind attribution. Participants play RPS against four AI agents (A–D) and a random-draw control, with computational modeling using the **CHASE framework** (Buergi et al., 2026) to extract trial-by-trial mentalizing estimates.
+A Rock-Paper-Scissors task for studying social cognition and mentalization. Participants play RPS against four social agents (A–D) and a random baseline, while computational modeling (CHASE) captures trial-by-trial belief updating about opponent strategy.
 
-## Overview
-
-This task is the social cognition component of a multi-session neuroimaging study. It is administered **in-scanner**, after the conversation phase and face-viewing task. The core hypothesis is that felt connection during prior interaction modulates how strongly participants mentalize toward each agent during RPS — captured both behaviorally and computationally.
-
-**Key constructs measured:**
-- Win rate, choice entropy, win-stay/lose-shift (behavioral)
-- Strategic level *k*, belief update magnitude (KL divergence), convergence rate (CHASE model)
-
-**Prediction:** Monotonic gradient A > B > C > D > random in all mentalizing measures, driven by prior connection rather than agent difficulty (agents are matched on strategic level).
+Based on the CHASE model from Buergi, Aydogan, Konovalov & Ruff (2026, *Nature Neuroscience*).
 
 ---
 
-## Repository Structure
+## Repository structure
 
 ```
 rps-social-cognition/
-├── task/                    # PsychoPy task scripts
-│   ├── rps_task.py          # Main task runner
-│   ├── config.py            # Task parameters
-│   ├── agents.py            # AI agent strategy implementations
-│   └── trial_structure.py   # Trial/block logic
-├── models/                  # Computational models
-│   ├── chase.py             # CHASE model (Buergi et al., 2026)
-│   ├── alternatives.py      # RL, FP, EWA, EWA-S, ToMk
-│   └── model_comparison.py  # Bayesian model comparison utilities
-├── analysis/                # Analysis scripts
-│   ├── behavioral.py        # Win rate, entropy, WSLS, autocorrelation
-│   ├── model_fitting.py     # MLE fitting pipeline
-│   ├── belief_updates.py    # KL divergence / BU extraction
-│   └── plots.py             # Figures
+├── task/
+│   └── rps_task.html        # jsPsych task — open in browser to run
 ├── stimuli/
-│   └── avatars/             # Agent avatar images (A, B, C, D + RNG icon)
+│   └── avatars/             # Drop avatar PNGs here (optional)
+├── analysis/
+│   ├── behavioral.py        # Model-free measures (win rate, entropy, WSLS)
+│   ├── model_fitting.py     # MLE fitting pipeline, AIC model comparison
+│   ├── belief_updates.py    # CHASE belief update timeseries utilities
+│   └── plots.py             # Figures (in progress)
+├── models/
+│   ├── chase.py             # Full CHASE model
+│   └── alternatives.py      # RL, FP, EWA, EWA-S, ToMk (stubs)
 ├── utils/
-│   ├── data_io.py           # Data loading/saving helpers
-│   └── counterbalancing.py  # Block order counterbalancing
-├── tests/                   # Unit tests
-├── docs/
-│   └── task_design.md       # Full design specification
-├── requirements.txt
-└── README.md
+│   ├── counterbalancing.py  # Latin-square block order
+│   └── data_io.py           # CSV load/save helpers
+├── data/                    # Output CSVs go here (gitignored)
+├── results/                 # Analysis outputs go here (gitignored)
+└── requirements.txt
 ```
 
 ---
 
-## Task Design
+## Running the task
 
-### Agents & Conditions
+### Local testing
 
-| Condition | Identifier | Strategic Level | Prior Context |
-|-----------|-----------|----------------|---------------|
-| Agent A | `agent_a` | k ≈ 1–2 | Highest connection |
-| Agent B | `agent_b` | k ≈ 1–2 | Moderate-high connection |
-| Agent C | `agent_c` | k ≈ 1–2 | Moderate-low connection |
-| Agent D | `agent_d` | k ≈ 1–2 | Lowest connection |
-| Random draw | `rng` | k = 0 (random) | No opponent |
+1. Clone the repo and start a local server from the root:
+   ```bash
+   python3 -m http.server 8000
+   ```
+2. Open your browser and go to:
+   ```
+   http://localhost:8000/task/rps_task.html
+   ```
+3. Use keys **1**, **2**, **3** to play (Rock, Paper, Scissors).
 
-All four agents play at the **same strategic level** (k ≈ 1–2 in the CHASE framework). Any differences in mentalizing are therefore attributable to prior interaction experience, not opponent difficulty. The random draw control provides a non-social baseline: choices are made with equal probability and participants are told there is no opponent.
+By default the task runs **5 trials per block** for fast testing. At the end it downloads a CSV to your Downloads folder.
 
-### Structure
+### URL parameters
 
-- **5 blocks** (one per agent/RNG), ~30–40 trials each
-- **Block order** counterbalanced across participants
-- **~20–25 min** total
-- Each block identified by a unique avatar face (agents) or generic icon (RNG)
+Append these to the URL to configure the task:
 
-### Trial Structure (following Buergi et al., 2026)
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `pid` | `TEST001` | Participant ID |
+| `session` | `1` | Session number |
+| `trials` | `5` | Trials per block (use `35` for real runs) |
+| `practice` | off | Add `&practice=1` to include a practice block |
+| `seed` | random | Add `&seed=42` for a reproducible agent sequence |
 
+Example full run:
 ```
-1. Opponent display     — avatar shown, opponent identified
-2. Choice               — Rock / Paper / Scissors (self-paced)
-3. Outcome feedback     — Win / Lose / Draw + points update
-4. ITI                  — fixation cross (jittered)
+http://localhost:8000/task/rps_task.html?pid=SUB001&session=1&trials=35&practice=1
 ```
 
-### Payoff Structure
+### Online (Prolific + fly.io)
 
-Points awarded for wins, deducted for losses, to incentivize strategic play. Exact conversion rate TBD based on lab norms.
+Host the repo on fly.io and point your Prolific study URL to:
+```
+https://your-app.fly.dev/task/rps_task.html?pid={{%PROLIFIC_PID%}}&session=1&trials=35
+```
 
 ---
 
-## CHASE Model
+## Task design
 
-The **Cognitive Hierarchy Assessment with Sophistication Estimation** (CHASE; Buergi et al., 2026) is the primary computational model. It captures *adaptive mentalization* — the trial-by-trial updating of beliefs about an opponent's strategic sophistication — rather than assuming a fixed strategy.
-
-### Core assumptions
-
-**A1 — Level-0 play** is governed by a recency-weighted action frequency tracker (delta rule over actions):
-
-$$A(a)_{t+1} = A(a)_t + \alpha \cdot (\mathbf{I}(a) - A(a)_t)$$
-
-**A2 — Strategic play (k > 0)** applies recursive best-response reasoning up to level k:
-
-$$P(a|k>0) = \sigma(\Pi \times \cdots \sigma(\Pi \times P(a|k=0))\cdots)$$
-
-**A3 — Adaptive play (κ > 1)** maintains a belief distribution over opponent levels and updates it via Bayes' rule:
-
-$$B(k|a)_{t+1} = \frac{L(k|a)_t \cdot B(k)_t}{\sum_k L(k|a)_t \cdot B(k)_t}$$
-
-### Key outputs (per agent condition)
-
-| Parameter | Description |
-|-----------|-------------|
-| `k` | Strategic level used by participant |
-| `kappa` | Maximum sophistication level |
-| `alpha` | Action frequency learning rate |
-| `beta` | Softmax noise |
-| `gamma` | Sensitivity to opponent-level evidence (Bayesian learning rate analog) |
-| `lambda` | Loss sensitivity |
-| `BU` | Belief update magnitude (KL divergence between successive belief distributions) |
-
-### Behavioral measures (no model required)
-
-| Measure | Description |
-|---------|-------------|
-| Win rate | Proportion wins (chance = 1/3) |
-| Choice entropy | Randomness of choices (lower = more structured) |
-| Win-stay rate | P(repeat action \| previous win) |
-| Lose-shift rate | P(switch action \| previous loss) |
-| Choice autocorrelation | Sequential dependencies in choices |
+- **5 blocks**, one per agent (A, B, C, D, RNG), order counterbalanced across participants via Latin square
+- **35 trials per block** (~4–5 min per block)
+- **Points**: +3 win, −3 lose, 0 draw, starting from 100
+- **Agents**: all social agents (A–D) play at the same CHASE level (k=1) with calibrated noise; RNG is purely random
+- Agent order is determined by participant ID so the same ID always gets the same order
 
 ---
 
-## Installation
+## Data output
 
+Each run downloads a CSV with one row per trial:
+
+| Column | Description |
+|--------|-------------|
+| `participant_id` | Participant ID |
+| `session` | Session number |
+| `block` | Block number (1–5) |
+| `agent` | Agent ID (`agent_a` … `rng`) |
+| `trial_in_block` | Trial number within block |
+| `trial_global` | Trial number across whole task |
+| `participant_choice` | 1=Rock, 2=Paper, 3=Scissors |
+| `agent_choice` | Agent's choice |
+| `outcome` | `win` / `lose` / `draw` |
+| `points_delta` | Points earned this trial |
+| `points_cumulative` | Running total |
+| `rt` | Response time (ms) |
+| `timestamp` | Unix timestamp |
+
+Place CSV files in `data/` before running analysis scripts.
+
+---
+
+## Analysis
+
+Install dependencies:
 ```bash
-git clone https://github.com/your-lab/rps-social-cognition.git
-cd rps-social-cognition
-pip install -r requirements.txt
+pip install numpy pandas scipy matplotlib
 ```
 
-### Dependencies
-
-See `requirements.txt`. Core dependencies:
-- `psychopy` — task presentation
-- `numpy`, `scipy` — numerical computing
-- `pandas` — data handling
-- `matplotlib`, `seaborn` — plotting
-- `pymc` or custom MLE — model fitting
-
----
-
-## Running the Task
-
+**Behavioral (model-free):**
 ```bash
-cd task/
-python rps_task.py --participant_id SUB001 --session 1
-```
-
-**Arguments:**
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--participant_id` | Subject identifier | required |
-| `--session` | Session number | `1` |
-| `--n_trials` | Trials per block | `35` |
-| `--practice` | Run practice block | `False` |
-| `--fullscreen` | Fullscreen mode | `True` |
-| `--seed` | RNG seed for block order | `None` |
-
-Output is saved to `data/SUB001_session1_rps.csv`.
-
----
-
-## Data Format
-
-Each row is one trial. Key columns:
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `participant_id` | str | Subject ID |
-| `session` | int | Session number |
-| `block` | int | Block number (1–5) |
-| `agent` | str | `agent_a/b/c/d` or `rng` |
-| `trial` | int | Trial within block |
-| `participant_choice` | int | 1=Rock, 2=Paper, 3=Scissors |
-| `agent_choice` | int | 1=Rock, 2=Paper, 3=Scissors |
-| `outcome` | str | `win`, `lose`, `draw` |
-| `points` | int | Cumulative points |
-| `rt` | float | Response time (s) |
-| `timestamp` | float | Unix timestamp |
-
----
-
-## Fitting the CHASE Model
-
-```python
-from models.chase import CHASEModel
-from analysis.model_fitting import fit_participant
-
-# Load data for one participant
-data = load_participant_data("SUB001")
-
-# Fit CHASE separately for each agent condition
-results = {}
-for agent in ["agent_a", "agent_b", "agent_c", "agent_d", "rng"]:
-    agent_data = data[data["agent"] == agent]
-    results[agent] = fit_participant(CHASEModel, agent_data)
-
-# Extract belief updates (KL divergence per trial)
-from analysis.belief_updates import extract_bu_timeseries
-bu = extract_bu_timeseries(results["agent_a"])
-```
-
----
-
-## Analysis Pipeline
-
-```bash
-# 1. Behavioral summary (per participant × agent)
 python analysis/behavioral.py --data_dir data/ --output_dir results/behavioral/
-
-# 2. Model fitting (all participants)
-python analysis/model_fitting.py --data_dir data/ --model chase --output_dir results/models/
-
-# 3. Model comparison (CHASE vs. alternatives)
-python models/model_comparison.py --results_dir results/models/
-
-# 4. Generate figures
-python analysis/plots.py --results_dir results/ --output_dir figures/
 ```
+Computes win rate, choice entropy, win-stay/lose-shift, and lag-1 autocorrelation per participant × agent, plus a monotonic gradient test (A > B > C > D > RNG).
+
+**Model fitting (CHASE + alternatives):**
+```bash
+python analysis/model_fitting.py --data_dir data/ --output_dir results/models/ --model chase,rl,fp
+```
+Fits models via MLE with random restarts, outputs per-participant parameters, trial-level CHASE estimates (belief updates, APE, choice values), and AIC model comparison.
 
 ---
 
-## Task Placement Rationale
+## Avatar images
 
-The RPS task is administered *after* all conversations and the face-viewing task because:
+To use custom avatars instead of emoji placeholders:
 
-1. **Avoid priming mentalizing** — inserting a ToM task between conversations could artificially inflate or alter social dynamics during the conversation phase.
-2. **Test persistence** — demonstrating that connection-induced mentalizing persists beyond the interaction is a stronger result than showing it only during conversation.
-3. **Clean analytic separation** — conversation phase → social dynamics; face-viewing phase → RSA/neural representation; RPS phase → ToM. Connection during conversation is the bridge variable.
+1. Add PNG files to `stimuli/avatars/`:
+   ```
+   stimuli/avatars/avatar_a.png
+   stimuli/avatars/avatar_b.png
+   stimuli/avatars/avatar_c.png
+   stimuli/avatars/avatar_d.png
+   stimuli/avatars/rng_icon.png
+   ```
+2. In `task/rps_task.html`, find the `AVATAR_PATHS` config at the top of the script and update:
+   ```javascript
+   AVATAR_PATHS: {
+     agent_a: "stimuli/avatars/avatar_a.png",
+     agent_b: "stimuli/avatars/avatar_b.png",
+     agent_c: "stimuli/avatars/avatar_c.png",
+     agent_d: "stimuli/avatars/avatar_d.png",
+     rng:     "stimuli/avatars/rng_icon.png",
+   }
+   ```
 
 ---
 
 ## Citation
 
-If you use this task or the CHASE model, please cite:
-
-```bibtex
-@article{buergi2026neural,
-  title={A neural signature of adaptive mentalization},
-  author={Buergi, Niklas and Aydogan, G{\"o}khan and Konovalov, Arkady and Ruff, Christian C.},
-  journal={Nature Neuroscience},
-  volume={29},
-  pages={934--944},
-  year={2026},
-  doi={10.1038/s41593-026-02219-x}
-}
-```
-
----
-
-## Contact
-
-[Your lab contact here]
-
-*Created: 2026-03-16 | Task design session 22*
-*Last updated: 2026-05-19*
+Buergi, Aydogan, Konovalov & Ruff (2026). *Nature Neuroscience.*
