@@ -32,6 +32,24 @@ rps-social-cognition/
 
 ---
 
+---
+
+## Ongoing Tasks
+
+### MRI Compatibility
+- [ ] TR trigger sync (using F8)
+- [ ] Onset logging: every trial onset, response, and feedback event should be logged with a session-local t_ms
+- [ ] Jittered ITIs
+- [ ] Ensure current trial count and duration is around ~ 10 minutes or so
+- [ ] Ensure task is fully keypoard-operable (not mouse)
+- [ ] Event logging should be via SQLite DB: every trial needs trial onset t_ms, agent choice, outcome, and response time --> feeds CHASE model
+
+### Buergi paper / CHASE model
+- [ ] Confirm what output is needed for CHASE model and GLM
+- [x] Confirm number of trials: 6 blocks of 40 trials
+
+
+
 ## Running the task
 
 ### Local testing
