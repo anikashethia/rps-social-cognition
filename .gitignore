@@ -7,3 +7,10 @@ __pycache__/
 .DS_Store
 *.egg-info/
 .ipynb_checkpoints/
+
+# rps-social-cognition-2
+node_modules/
+dist/
+*.db
+.env
+.venv/
