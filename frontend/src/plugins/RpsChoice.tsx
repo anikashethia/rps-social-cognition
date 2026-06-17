@@ -32,13 +32,6 @@ const info = {
 
 type Info = typeof info;
 
-const EMOJIS: Record<string, string> = {
-  agent_a: "🔵",
-  agent_b: "🟢",
-  agent_c: "🟠",
-  agent_d: "🔴",
-  rng: "🎲",
-};
 
 class RpsChoicePlugin implements JsPsychPlugin<Info> {
   static info = info;
@@ -48,14 +41,21 @@ class RpsChoicePlugin implements JsPsychPlugin<Info> {
   trial(display_element: HTMLElement, trial: TrialType<Info>) {
     const trialOnset = performance.now();
     const agentId = trial.agent_id ?? "";
-    const agentName = trial.agent_name ?? "";
+    const agentName = trial.agent_name ?? "Player 1";
     const responseWindow = trial.response_window_ms ?? 4000;
     const onsetMs = trial.onset_ms ?? 0;
-    const emoji = EMOJIS[agentId] ?? "❓";
 
     display_element.innerHTML = `
       <div class="screen">
-        <div class="avatar">${emoji}</div>
+        <img
+          class="avatar-img"
+          src="/avatars/${agentId}.png"
+          alt="${agentName}"
+          width="110"
+          height="110"
+          style="border-radius:50%;object-fit:cover;"
+          onerror="this.style.display='none'"
+        />
         <div class="agent-name">${agentName}</div>
         <div class="choice-prompt">choose your move</div>
         <div class="choice-row">

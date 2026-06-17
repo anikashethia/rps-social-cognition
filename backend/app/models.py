@@ -45,6 +45,7 @@ class Trial(Base):
     onset_ms = Column(Float, nullable=False)
     iti_duration_ms = Column(Float, nullable=False)
     block_onset_ms = Column(Float, nullable=False)
+    condition = Column(String, nullable=False)  # "friendly", "neutral", "control"
 
     session = relationship("Session", back_populates="trials")
 

@@ -20,8 +20,8 @@ from typing import Dict, List, Optional
 import warnings
 
 
-AGENTS_ORDERED = ["agent_a", "agent_b", "agent_c", "agent_d", "rng"]
-N_ACTIONS      = 3   # Rock, Paper, Scissors
+CONDITIONS_ORDERED = ["friendly", "neutral", "control"]
+N_ACTIONS          = 3   # Rock, Paper, Scissors
 
 
 # ── Single-condition measures ─────────────────────────────────────────────────
@@ -119,54 +119,41 @@ def analyze_participant(
     participant_id: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Compute behavioral measures for all agent conditions for one participant.
+    Compute behavioral measures for all agent blocks for one participant.
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Full trial-level dataframe for one participant.
-
-    Returns
-    -------
-    pd.DataFrame with one row per agent condition and all behavioral measures.
+    Returns one row per agent block, with condition (friendly/neutral/control) included.
     """
+    pid  = participant_id or df["participant_id"].iloc[0]
     rows = []
-    for agent in AGENTS_ORDERED:
-        block_df = df[df["agent"] == agent]
-        if len(block_df) == 0:
-            warnings.warn(f"No trials found for agent={agent}, participant={participant_id}")
-            continue
+    for agent, block_df in df.groupby("agent"):
         summary = compute_condition_summary(block_df)
         summary["agent"]          = agent
-        summary["participant_id"] = participant_id or df["participant_id"].iloc[0]
+        summary["condition"]      = block_df["condition"].iloc[0]
+        summary["participant_id"] = pid
         rows.append(summary)
 
     result = pd.DataFrame(rows)
-    return result[["participant_id", "agent", "win_rate", "choice_entropy",
-                   "win_stay", "lose_shift", "autocorr_lag1", "n_trials"]]
+    return result[["participant_id", "agent", "condition", "win_rate",
+                   "choice_entropy", "win_stay", "lose_shift", "autocorr_lag1", "n_trials"]]
 
 
 # ── Group-level analysis ──────────────────────────────────────────────────────
 
-def analyze_group(data_dir: str = "data/") -> pd.DataFrame:
+def analyze_group(db_path: str = "backend/rps.db") -> pd.DataFrame:
     """
-    Load all participant data files and compute behavioral measures for each.
-    Returns a long-format DataFrame with one row per participant × agent.
+    Load all participant data from SQLite and compute behavioral measures.
+    Returns a long-format DataFrame with one row per participant × agent block.
     """
-    import os
-    from utils.data_io import load_participant_data
+    from analysis.data_io import load_participant_data, list_participants
 
     all_results = []
-    for fname in sorted(os.listdir(data_dir)):
-        if not fname.endswith(".csv"):
-            continue
-        participant_id = fname.split("_session")[0]
+    for participant_id in list_participants(db_path):
         try:
-            df     = load_participant_data(participant_id, data_dir=data_dir)
+            df     = load_participant_data(participant_id, db_path=db_path)
             result = analyze_participant(df, participant_id=participant_id)
             all_results.append(result)
         except Exception as e:
-            warnings.warn(f"Failed to process {fname}: {e}")
+            warnings.warn(f"Failed to process {participant_id}: {e}")
 
     if not all_results:
         return pd.DataFrame()
@@ -180,43 +167,41 @@ def test_monotonic_gradient(
     measure:  str = "win_rate",
 ) -> Dict[str, float]:
     """
-    Test whether the expected monotonic gradient A > B > C > D > rng holds
-    for a given behavioral measure. Uses a one-way repeated-measures approach
-    (Jonckheere-Terpstra trend test or Spearman correlation with agent rank).
+    Test whether the expected gradient friendly > neutral > control holds
+    for a given behavioral measure, using Spearman correlation with condition rank.
 
     Returns dict with test statistic, p-value, and effect size (Spearman r).
     """
-    from scipy.stats import spearmanr
+    from scipy.stats import spearmanr, ttest_1samp
 
-    agent_order = {ag: i for i, ag in enumerate(AGENTS_ORDERED)}
+    condition_rank = {c: i for i, c in enumerate(CONDITIONS_ORDERED)}
     group_df = group_df.copy()
-    group_df["agent_rank"] = group_df["agent"].map(agent_order)
+    group_df["condition_rank"] = group_df["condition"].map(condition_rank)
 
-    # Per-participant: average measure per agent (should already be one row per agent)
-    pivot = group_df.pivot_table(index="participant_id", columns="agent", values=measure)
-
-    # Spearman correlation between agent rank and measure, within each participant,
-    # then test whether the mean Fisher-z is different from 0.
-    from scipy.stats import ttest_1samp
+    # Average across blocks within the same condition per participant
+    pivot = group_df.pivot_table(
+        index="participant_id", columns="condition", values=measure, aggfunc="mean"
+    )
 
     r_values = []
     for pid, row in pivot.iterrows():
-        ranks = np.array([agent_order[a] for a in row.index if not np.isnan(row[a])])
-        vals  = np.array([row[a] for a in row.index if not np.isnan(row[a])])
-        if len(ranks) < 3:
+        valid_conds = [c for c in CONDITIONS_ORDERED if c in row.index and not np.isnan(row[c])]
+        if len(valid_conds) < 2:
             continue
-        r, _ = spearmanr(ranks, vals)
+        ranks = np.array([condition_rank[c] for c in valid_conds])
+        vals  = np.array([row[c] for c in valid_conds])
+        r, _  = spearmanr(ranks, vals)
         r_values.append(r)
 
-    r_arr = np.array(r_values)
-    z_arr = np.arctanh(np.clip(r_arr, -0.999, 0.999))  # Fisher z-transform
+    r_arr  = np.array(r_values)
+    z_arr  = np.arctanh(np.clip(r_arr, -0.999, 0.999))
     t_stat, p_val = ttest_1samp(z_arr, popmean=0)
 
     return {
-        "measure":      measure,
-        "mean_r":       float(np.tanh(z_arr.mean())),
-        "t_stat":       float(t_stat),
-        "p_value":      float(p_val),
+        "measure":        measure,
+        "mean_r":         float(np.tanh(z_arr.mean())),
+        "t_stat":         float(t_stat),
+        "p_value":        float(p_val),
         "n_participants": len(r_values),
     }
 
@@ -227,14 +212,14 @@ if __name__ == "__main__":
     import argparse, os
 
     parser = argparse.ArgumentParser(description="Behavioral analysis")
-    parser.add_argument("--data_dir",    default="data/")
-    parser.add_argument("--output_dir",  default="results/behavioral/")
+    parser.add_argument("--db_path",    default="backend/rps.db")
+    parser.add_argument("--output_dir", default="results/behavioral/")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
 
     print("Loading data and computing behavioral measures...")
-    group_df = analyze_group(args.data_dir)
+    group_df = analyze_group(args.db_path)
     group_df.to_csv(os.path.join(args.output_dir, "behavioral_summary.csv"), index=False)
     print(f"Saved to {args.output_dir}behavioral_summary.csv")
 

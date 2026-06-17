@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import create_all
-from .routers import sessions, trials, triggers
+from .routers import sessions, trials, triggers, rotations
 
 load_dotenv()
 
@@ -43,6 +43,7 @@ app.add_middleware(
 app.include_router(sessions.router, prefix="/api")
 app.include_router(trials.router, prefix="/api")
 app.include_router(triggers.router, prefix="/api")
+app.include_router(rotations.router, prefix="/api")
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

@@ -39,6 +39,17 @@ export interface TrialData {
   onset_ms: number;
   iti_duration_ms: number;
   block_onset_ms: number;
+  condition: string;
+}
+
+export interface BlockConfig {
+  avatar_id: string;
+  condition: string;
+}
+
+export interface RotationConfig {
+  set: number;
+  blocks: BlockConfig[];
 }
 
 export interface TrialOut extends TrialData {
@@ -110,6 +121,10 @@ export async function postTrial(
   trial: TrialData,
 ): Promise<TrialOut> {
   return post<TrialOut>(`/api/sessions/${sessionId}/trials`, trial);
+}
+
+export async function getRotation(configIndex: number): Promise<RotationConfig> {
+  return get<RotationConfig>(`/api/rotations/${configIndex}`);
 }
 
 export async function postTrigger(

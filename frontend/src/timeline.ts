@@ -1,12 +1,12 @@
 /**
  * Full jsPsych timeline builder for the RPS social cognition task.
  *
- * Builds welcome → rules → (scanner wait) → blocks × trials → end.
- * Each trial posts data to the backend via api.ts.
+ * Fetches the participant's rotation config (avatar order + conditions) from
+ * the backend, then builds: welcome → rules → (scanner wait) → 8 blocks × trials → end.
  */
 
 import HtmlKeyboardResponsePlugin from "@jspsych/plugin-html-keyboard-response";
-import { postTrial, postTrigger, setAnchor, type TrialData } from "./api";
+import { getRotation, postTrial, postTrigger, setAnchor, type BlockConfig, type TrialData } from "./api";
 import { buildAgent, type Agent } from "./agents";
 import FixationPlugin from "./plugins/Fixation";
 import RpsChoicePlugin from "./plugins/RpsChoice";
@@ -23,57 +23,10 @@ const TIMINGS: Record<Mode, {
   response_window: number;
   feedback: number;
 }> = {
-  dev:        { trials: 5,  iti_min: 0, iti_max: 1000,  response_window: 4000, feedback: 2000 },
-  behavioral: { trials: 40, iti_min: 0, iti_max: 6000,  response_window: 4000, feedback: 2000 },
-  scanner:    { trials: 40, iti_min: 0, iti_max: 6000,  response_window: 4000, feedback: 2000 },
+  dev:        { trials: 5,  iti_min: 0, iti_max: 1000, response_window: 4000, feedback: 2000 },
+  behavioral: { trials: 20, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
+  scanner:    { trials: 20, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
 };
-
-// ── Agent display info ───────────────────────────────────────────────────────
-
-const AGENT_NAMES: Record<string, string> = {
-  agent_a: "Agent A",
-  agent_b: "Agent B",
-  agent_c: "Agent C",
-  agent_d: "Agent D",
-  rng: "Random Draw",
-};
-
-const AGENT_EMOJIS: Record<string, string> = {
-  agent_a: "🔵",
-  agent_b: "🟢",
-  agent_c: "🟠",
-  agent_d: "🔴",
-  rng: "🎲",
-};
-
-// ── Counterbalancing (Latin-square rotations) ────────────────────────────────
-// 24 configs: all permutations of 4 social agents, RNG inserted at rotating pos.
-
-function generateRotations(): string[][] {
-  const social = ["agent_a", "agent_b", "agent_c", "agent_d"];
-  const perms: string[][] = [];
-
-  function permute(arr: string[], l: number) {
-    if (l === arr.length - 1) {
-      perms.push([...arr]);
-      return;
-    }
-    for (let i = l; i < arr.length; i++) {
-      [arr[l]!, arr[i]!] = [arr[i]!, arr[l]!];
-      permute(arr, l + 1);
-      [arr[l]!, arr[i]!] = [arr[i]!, arr[l]!];
-    }
-  }
-
-  permute(social, 0);
-
-  return perms.map((perm, i) => {
-    const pos = i % 5;
-    return [...perm.slice(0, pos), "rng", ...perm.slice(pos)];
-  });
-}
-
-const ROTATIONS = generateRotations(); // length = 24
 
 // ── Game logic ───────────────────────────────────────────────────────────────
 
@@ -91,14 +44,12 @@ function pointsDelta(outcome: string): number {
 
 // ── HUD ──────────────────────────────────────────────────────────────────────
 
-function updateHUD(agentId: string, blockNum: number, totalBlocks: number, pts: number) {
+function updateHUD(blockNum: number, totalBlocks: number, pts: number) {
   const hud = document.getElementById("hud");
   if (!hud) return;
   hud.style.display = "block";
-  const agentEl = document.getElementById("hud-agent");
   const blockEl = document.getElementById("hud-block");
   const ptsEl = document.getElementById("hud-pts");
-  if (agentEl) agentEl.textContent = AGENT_NAMES[agentId] ?? "";
   if (blockEl) blockEl.textContent = `Block ${blockNum} / ${totalBlocks}`;
   if (ptsEl) ptsEl.textContent = `${pts} pts`;
 }
@@ -110,9 +61,16 @@ function hideHUD() {
 
 // ── HTML generators ──────────────────────────────────────────────────────────
 
-function avatarHTML(agentId: string, size = 110): string {
-  const emoji = AGENT_EMOJIS[agentId] ?? "❓";
-  return `<div class="avatar" style="width:${size}px;height:${size}px">${emoji}</div>`;
+function avatarHTML(avatarId: string, size = 110): string {
+  return `<img
+    class="avatar-img"
+    src="/avatars/${avatarId}.png"
+    alt="Player"
+    width="${size}"
+    height="${size}"
+    style="border-radius:50%;object-fit:cover;"
+    onerror="this.style.display='none'"
+  />`;
 }
 
 function welcomeHTML(): string {
@@ -122,7 +80,7 @@ function welcomeHTML(): string {
       <div class="body-text">
         Welcome to the next part of the study.<br><br>
         You will now play <strong>Rock-Paper-Scissors</strong> against
-        each of the agents you interacted with earlier, plus a random draw.
+        several players.
       </div>
       <div class="hint">press any key to continue</div>
     </div>`;
@@ -158,20 +116,14 @@ function waitingForScannerHTML(): string {
     </div>`;
 }
 
-function blockIntroHTML(agentId: string, blockNum: number, totalBlocks: number): string {
+function blockIntroHTML(block: BlockConfig, blockNum: number, totalBlocks: number): string {
   const pct = (((blockNum - 1) / totalBlocks) * 100).toFixed(0);
-  const name = AGENT_NAMES[agentId] ?? agentId;
-  const desc =
-    agentId === "rng"
-      ? "In this block there is <strong>no opponent</strong>.<br>A choice will be drawn randomly."
-      : `You will now play against <strong>${name}</strong>.`;
-
   return `
     <div class="screen">
       <div class="tag">Block ${blockNum} of ${totalBlocks}</div>
-      ${avatarHTML(agentId, 100)}
-      <div class="agent-name">${name}</div>
-      <div class="body-text">${desc}</div>
+      ${avatarHTML(block.avatar_id, 100)}
+      <div class="agent-name">Player 1</div>
+      <div class="body-text">You will now play against <strong>Player 1</strong>.</div>
       <div class="progress-wrap">
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
         <div class="progress-label">${blockNum - 1} / ${totalBlocks} blocks done</div>
@@ -193,17 +145,18 @@ function endHTML(pts: number): string {
 
 // ── Timeline builder ─────────────────────────────────────────────────────────
 
-export function buildTimeline(
+export async function buildTimeline(
   sessionId: number,
   mode: Mode,
   configIndex: number,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any[] {
+): Promise<any[]> {
+  const rotation = await getRotation(configIndex);
   const timings = TIMINGS[mode];
-  const blockOrder = ROTATIONS[(configIndex - 1) % ROTATIONS.length]!;
-  const totalBlocks = blockOrder.length;
+  const blocks = rotation.blocks;
+  const totalBlocks = blocks.length;
 
-  // ── Mutable session state (closed over by timeline callbacks) ──────────
+  // ── Mutable session state ──────────────────────────────────────────────
 
   let sessionAnchorMs = 0;
   let points = 100;
@@ -214,39 +167,34 @@ export function buildTimeline(
   let lastItiMs = 0;
   let lastResult: TrialData | null = null;
 
-  // ── F8 trigger listener setup ──────────────────────────────────────────
+  // ── F8 trigger listener ────────────────────────────────────────────────
 
   function setupTriggerListener() {
     document.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key !== "F8") return;
       const tMs = performance.now() - sessionAnchorMs;
-      postTrigger(sessionId, { tr_number: trNumber++, t_ms: tMs }).catch(
-        console.error,
-      );
+      postTrigger(sessionId, { tr_number: trNumber++, t_ms: tMs }).catch(console.error);
     });
   }
 
-  // ── Build timeline array ───────────────────────────────────────────────
+  // ── Build timeline ─────────────────────────────────────────────────────
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeline: any[] = [];
 
-  // Welcome
   timeline.push({
     type: HtmlKeyboardResponsePlugin,
     stimulus: welcomeHTML(),
     choices: "ALL_KEYS",
   });
 
-  // Rules
   timeline.push({
     type: HtmlKeyboardResponsePlugin,
     stimulus: rulesHTML(),
     choices: "ALL_KEYS",
   });
 
-  // Anchor setup
   if (mode === "scanner") {
-    // Waiting-for-scanner screen — advances only on F8
     timeline.push({
       type: HtmlKeyboardResponsePlugin,
       stimulus: waitingForScannerHTML(),
@@ -259,7 +207,6 @@ export function buildTimeline(
       },
     });
   } else {
-    // Non-scanner: invisible anchor trial + optional dev F8 listener
     timeline.push({
       type: HtmlKeyboardResponsePlugin,
       stimulus: "",
@@ -267,9 +214,7 @@ export function buildTimeline(
       trial_duration: 1,
       on_start: () => {
         sessionAnchorMs = performance.now();
-        if (mode === "dev") {
-          setupTriggerListener();
-        }
+        if (mode === "dev") setupTriggerListener();
       },
     });
   }
@@ -277,17 +222,16 @@ export function buildTimeline(
   // ── Blocks ─────────────────────────────────────────────────────────────
 
   for (let b = 0; b < totalBlocks; b++) {
-    const agentId = blockOrder[b]!;
+    const block = blocks[b]!;
     const blockNum = b + 1;
 
-    // Block intro
     timeline.push({
       type: HtmlKeyboardResponsePlugin,
-      stimulus: () => blockIntroHTML(agentId, blockNum, totalBlocks),
+      stimulus: () => blockIntroHTML(block, blockNum, totalBlocks),
       choices: "ALL_KEYS",
       on_start: () => {
-        currentAgent = buildAgent(agentId, configIndex * 1000 + b);
-        updateHUD(agentId, blockNum, totalBlocks, points);
+        currentAgent = buildAgent(block.avatar_id, configIndex * 1000 + b);
+        updateHUD(blockNum, totalBlocks, points);
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       on_finish: (_data: any) => {
@@ -295,12 +239,11 @@ export function buildTimeline(
       },
     });
 
-    // Trials within block
     for (let t = 0; t < timings.trials; t++) {
-      // Pre-draw ITI duration (uniform iti_min to iti_max)
-      const itiMs = Math.floor(Math.random() * (timings.iti_max - timings.iti_min) + timings.iti_min);
+      const itiMs = Math.floor(
+        Math.random() * (timings.iti_max - timings.iti_min) + timings.iti_min,
+      );
 
-      // ── Fixation ──
       timeline.push({
         type: FixationPlugin,
         duration_ms: itiMs,
@@ -310,22 +253,18 @@ export function buildTimeline(
         },
       });
 
-      // ── Choice ──
       timeline.push({
         type: RpsChoicePlugin,
-        agent_id: agentId,
-        agent_name: AGENT_NAMES[agentId] ?? agentId,
+        agent_id: block.avatar_id,
+        agent_name: "Player 1",
         response_window_ms: timings.response_window,
-        // onset_ms is evaluated as a function at trial start time
         onset_ms: () => performance.now() - sessionAnchorMs,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         on_finish: (data: any) => {
           const pChoice: number | null = data.participant_choice ?? null;
           const aChoice = currentAgent!.choose();
 
-          if (pChoice !== null) {
-            currentAgent!.update(aChoice, pChoice);
-          }
+          if (pChoice !== null) currentAgent!.update(aChoice, pChoice);
 
           const out = pChoice !== null ? computeOutcome(pChoice, aChoice) : "timeout";
           const delta = pChoice !== null ? pointsDelta(out) : 0;
@@ -334,7 +273,7 @@ export function buildTimeline(
 
           lastResult = {
             block: blockNum,
-            agent: agentId,
+            agent: block.avatar_id,
             trial_in_block: t + 1,
             trial_global: trialGlobal,
             participant_choice: pChoice,
@@ -346,14 +285,13 @@ export function buildTimeline(
             onset_ms: data.onset_ms as number,
             iti_duration_ms: lastItiMs,
             block_onset_ms: currentBlockOnsetMs,
+            condition: block.condition,
           };
 
-          // Update HUD points
-          updateHUD(agentId, blockNum, totalBlocks, points);
+          updateHUD(blockNum, totalBlocks, points);
         },
       });
 
-      // ── Feedback ──
       timeline.push({
         type: FeedbackPlugin,
         participant_choice: () => lastResult?.participant_choice ?? null,
@@ -363,24 +301,17 @@ export function buildTimeline(
         points_cumulative: () => lastResult?.points_cumulative ?? points,
         feedback_duration_ms: timings.feedback,
         on_finish: () => {
-          // POST trial to backend (fire-and-forget for timing)
-          if (lastResult) {
-            postTrial(sessionId, lastResult).catch(console.error);
-          }
+          if (lastResult) postTrial(sessionId, lastResult).catch(console.error);
         },
       });
     }
   }
 
-  // ── End screen ─────────────────────────────────────────────────────────
-
   timeline.push({
     type: HtmlKeyboardResponsePlugin,
     stimulus: () => endHTML(points),
     choices: "ALL_KEYS",
-    on_start: () => {
-      hideHUD();
-    },
+    on_start: () => { hideHUD(); },
   });
 
   return timeline;

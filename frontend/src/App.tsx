@@ -24,7 +24,7 @@ export default function App() {
   const jspsychRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
 
-  const configMax = mode === "scanner" ? 60 : 24;
+  const configMax = 16; // expand when mentor's final rotation table is ready
 
   // ── Launch jsPsych once status flips to "running" ────────────────────
 
@@ -40,8 +40,9 @@ export default function App() {
       },
     });
 
-    const timeline = buildTimeline(sessionId, mode, configIndex);
-    jsPsych.run(timeline);
+    buildTimeline(sessionId, mode, configIndex)
+      .then((timeline) => jsPsych.run(timeline))
+      .catch((err) => console.error("Failed to build timeline:", err));
   }, [status, sessionId, mode, configIndex]);
 
   // ── Handlers ─────────────────────────────────────────────────────────

@@ -146,28 +146,10 @@ class CHASEAgent implements Agent {
   }
 }
 
-// ── Agent config (all social agents at same CHASE level) ─────────────────────
-
-export const AGENT_CONFIG: Record<
-  string,
-  { level: number; noise: number | null }
-> = {
-  agent_a: { level: 1, noise: 0.15 },
-  agent_b: { level: 1, noise: 0.15 },
-  agent_c: { level: 1, noise: 0.15 },
-  agent_d: { level: 1, noise: 0.15 },
-  rng: { level: 0, noise: null },
-};
-
 // ── Factory ──────────────────────────────────────────────────────────────────
+// All agents use CHASE level=1 with the same parameters — the experimental
+// manipulation is social context (friendly/neutral/control), not agent strategy.
 
-export function buildAgent(agentId: string, seed: number | null): Agent {
-  if (agentId === "rng") return new RandomAgent(agentId, seed);
-  const cfg = AGENT_CONFIG[agentId];
-  if (!cfg) return new RandomAgent(agentId, seed);
-  return new CHASEAgent(agentId, {
-    level: cfg.level,
-    noise: cfg.noise ?? 0.15,
-    seed,
-  });
+export function buildAgent(avatarId: string, seed: number | null): Agent {
+  return new CHASEAgent(avatarId, { level: 1, noise: 0.15, seed });
 }

@@ -27,6 +27,7 @@ class TrialCreate(BaseModel):
     onset_ms: float
     iti_duration_ms: float
     block_onset_ms: float
+    condition: str  # "friendly", "neutral", "control"
 
 
 class TrialOut(BaseModel):
@@ -45,6 +46,7 @@ class TrialOut(BaseModel):
     onset_ms: float
     iti_duration_ms: float
     block_onset_ms: float
+    condition: str
 
     model_config = {"from_attributes": True}
 

@@ -18,10 +18,7 @@ from models.chase import CHASEModel, CHASEResult
 from models.alternatives import (
     RLModel, FictitiousPlayModel, EWAModel, SelfTuningEWAModel, ToMkModel
 )
-from utils.data_io import load_participant_data
-
-
-AGENTS_ORDERED = ["agent_a", "agent_b", "agent_c", "agent_d", "rng"]
+from analysis.data_io import load_participant_data, list_participants
 
 MODEL_REGISTRY = {
     "chase": CHASEModel,
@@ -49,7 +46,7 @@ def fit_participant_condition(
     Returns a flat dict with: participant_id, agent, model,
     all fitted params, log_likelihood, aic, n_trials, converged.
     """
-    block_df = df[df["agent"] == agent_id].sort_values("trial")
+    block_df = df[df["agent"] == agent_id].sort_values("trial_global")
 
     if len(block_df) < 5:
         warnings.warn(f"Too few trials: {participant_id} / {agent_id}")
@@ -69,6 +66,7 @@ def fit_participant_condition(
         "participant_id": participant_id,
         "agent":          agent_id,
         "model":          model_cls.__name__,
+        "condition":      block_df["condition"].iloc[0],
         "log_likelihood": result.log_likelihood,
         "aic":            result.aic,
         "n_trials":       len(block_df),
@@ -95,7 +93,7 @@ def fit_participant(
     Returns a DataFrame with one row per agent × model.
     """
     rows = []
-    for agent_id in AGENTS_ORDERED:
+    for agent_id in sorted(df["agent"].unique()):
         for model_name in model_names:
             model_cls = MODEL_REGISTRY[model_name]
             row = fit_participant_condition(
@@ -123,7 +121,7 @@ def extract_trial_level_estimates(
 
     Returns DataFrame with one row per trial.
     """
-    block_df = df[df["agent"] == agent_id].sort_values("trial").copy()
+    block_df = df[df["agent"] == agent_id].sort_values("trial_global").copy()
     choices  = block_df["participant_choice"].values.astype(int)
     opp      = block_df["agent_choice"].values.astype(int)
 
@@ -147,7 +145,7 @@ def extract_trial_level_estimates(
 # ── Group fitting pipeline ────────────────────────────────────────────────────
 
 def fit_group(
-    data_dir:    str = "data/",
+    db_path:     str = "backend/rps.db",
     output_dir:  str = "results/models/",
     model_names: List[str] = ("chase", "rl", "fp", "ewa", "ewa_s", "tomk"),
     n_restarts:  int = 10,
@@ -159,15 +157,14 @@ def fit_group(
     os.makedirs(output_dir, exist_ok=True)
     all_results = []
 
-    participant_files = [f for f in sorted(os.listdir(data_dir)) if f.endswith(".csv")]
-    n = len(participant_files)
+    participants = list_participants(db_path)
+    n = len(participants)
 
-    for i, fname in enumerate(participant_files):
-        participant_id = fname.split("_session")[0]
+    for i, participant_id in enumerate(participants):
         print(f"[{i+1}/{n}] Fitting {participant_id}...")
 
         try:
-            df = load_participant_data(participant_id, data_dir=data_dir)
+            df = load_participant_data(participant_id, db_path=db_path)
         except Exception as e:
             warnings.warn(f"Could not load {participant_id}: {e}")
             continue
@@ -236,7 +233,7 @@ def aic_model_comparison(fits_df: pd.DataFrame) -> pd.DataFrame:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Model fitting pipeline")
-    parser.add_argument("--data_dir",   default="data/")
+    parser.add_argument("--db_path",    default="backend/rps.db")
     parser.add_argument("--output_dir", default="results/models/")
     parser.add_argument("--model",      default="chase",
                         help="Comma-separated list of models to fit (chase,rl,fp,ewa,ewa_s,tomk)")
@@ -247,7 +244,7 @@ if __name__ == "__main__":
     model_names = [m.strip() for m in args.model.split(",")]
 
     fits = fit_group(
-        data_dir    = args.data_dir,
+        db_path     = args.db_path,
         output_dir  = args.output_dir,
         model_names = model_names,
         n_restarts  = args.n_restarts,
