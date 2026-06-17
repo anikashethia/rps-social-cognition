@@ -51,8 +51,8 @@ class RpsChoicePlugin implements JsPsychPlugin<Info> {
           class="avatar-img"
           src="/avatars/${agentId}.png"
           alt="${agentName}"
-          width="110"
-          height="110"
+          width="160"
+          height="160"
           style="border-radius:50%;object-fit:cover;"
           onerror="this.style.display='none'"
         />

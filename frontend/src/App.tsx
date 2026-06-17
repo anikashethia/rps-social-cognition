@@ -89,21 +89,21 @@ export default function App() {
   // ── Landing page ─────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="w-full max-w-md space-y-8 rounded-2xl border border-neutral-700 bg-neutral-800 p-8 shadow-xl">
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
+      <div className="w-full max-w-xl space-y-6 rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
         {/* Title */}
         <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             RPS Social Cognition
           </h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-1 text-sm text-slate-500">
             Rock&ndash;Paper&ndash;Scissors Task
           </p>
         </div>
 
         {/* Participant ID */}
-        <div className="space-y-2">
-          <label className="block text-sm text-neutral-300">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
             Participant ID
           </label>
           <input
@@ -111,22 +111,24 @@ export default function App() {
             value={participantId}
             onChange={(e) => setParticipantId(e.target.value)}
             placeholder="e.g. SUB001"
-            className="w-full rounded-lg border border-neutral-600 bg-neutral-900 px-4 py-2 text-neutral-100 placeholder-neutral-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
           />
         </div>
 
         {/* Mode selector */}
-        <div className="space-y-2">
-          <label className="block text-sm text-neutral-300">Mode</label>
-          <div className="flex gap-3">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
+            Mode
+          </label>
+          <div className="flex gap-2">
             {MODES.map((m) => (
               <button
                 key={m.value}
                 onClick={() => setMode(m.value)}
                 className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
                   mode === m.value
-                    ? "border-blue-500 bg-blue-500/20 text-blue-300"
-                    : "border-neutral-600 bg-neutral-900 text-neutral-400 hover:border-neutral-500"
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-400"
                 }`}
               >
                 {m.label}
@@ -136,10 +138,10 @@ export default function App() {
         </div>
 
         {/* Config index */}
-        <div className="space-y-2">
-          <label className="block text-sm text-neutral-300">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
             Config Index{" "}
-            <span className="text-neutral-500">(1&ndash;{configMax})</span>
+            <span className="font-normal normal-case tracking-normal text-slate-400">(1&ndash;{configMax})</span>
           </label>
           <input
             type="number"
@@ -151,13 +153,13 @@ export default function App() {
                 Math.max(1, Math.min(configMax, Number(e.target.value))),
               )
             }
-            className="w-full rounded-lg border border-neutral-600 bg-neutral-900 px-4 py-2 text-neutral-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
           />
         </div>
 
         {/* Error */}
         {error && (
-          <p className="rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
+          <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
             {error}
           </p>
         )}
@@ -166,7 +168,7 @@ export default function App() {
         <button
           onClick={handleBegin}
           disabled={status === "launching"}
-          className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-lg bg-slate-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status === "launching" ? "Launching..." : "Begin"}
         </button>

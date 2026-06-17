@@ -61,7 +61,7 @@ function hideHUD() {
 
 // ── HTML generators ──────────────────────────────────────────────────────────
 
-function avatarHTML(avatarId: string, size = 110): string {
+function avatarHTML(avatarId: string, size = 160): string {
   return `<img
     class="avatar-img"
     src="/avatars/${avatarId}.png"
@@ -121,7 +121,7 @@ function blockIntroHTML(block: BlockConfig, blockNum: number, totalBlocks: numbe
   return `
     <div class="screen">
       <div class="tag">Block ${blockNum} of ${totalBlocks}</div>
-      ${avatarHTML(block.avatar_id, 100)}
+      ${avatarHTML(block.avatar_id, 160)}
       <div class="agent-name">Player 1</div>
       <div class="body-text">You will now play against <strong>Player 1</strong>.</div>
       <div class="progress-wrap">
