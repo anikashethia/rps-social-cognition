@@ -1,6 +1,6 @@
 # RPS Social Cognition Task
 
-A Rock-Paper-Scissors task for studying social cognition and mentalization. Participants play RPS against four social agents (A–D) and a random baseline, while computational modeling (CHASE) captures trial-by-trial belief updating about opponent strategy.
+A Rock-Paper-Scissors task for studying social cognition and mentalization. Participants play RPS across 8 blocks against agents they've had prior conversations with (in the companion chat task, split into friendly/neutral conditions) and control agents they haven't spoken with, while computational modeling (CHASE) captures trial-by-trial belief updating about opponent strategy.
 
 Based on the CHASE model from Buergi, Aydogan, Konovalov & Ruff (2026, *Nature Neuroscience*).
 
@@ -26,7 +26,7 @@ rps-social-cognition/
 │   ├── src/
 │   │   ├── App.tsx             # Landing page: participant ID, mode, online/scanner launch
 │   │   ├── timeline.ts         # jsPsych timeline builder (welcome → blocks → end)
-│   │   ├── agents.ts           # Social agent behavior (CHASE-based) + RNG baseline
+│   │   ├── agents.ts           # Social agent behavior (CHASE-based); all 8 agents share strategy — the manipulation is condition (friendly/neutral/control), not agent skill
 │   │   ├── api.ts              # Typed fetch wrappers for backend endpoints
 │   │   ├── plugins/            # jsPsych plugins: RpsChoice, Feedback, Fixation
 │   │   └── index.css           # Styling — black intro screens, white task screens
@@ -61,7 +61,7 @@ rps-social-cognition/
 
 ### Buergi paper / CHASE model
 - [ ] Confirm what output is needed for CHASE model and GLM
-- [x] Confirm number of trials: 6 blocks of 40 trials
+- [ ] Confirm trial count per block — current Full-mode setting (35 trials × 8 blocks) runs ~42 minutes, far over the ~10 minute target above; awaiting `analysis/parameter_recovery.py` results to pick a count that's both fast enough and recovers CHASE parameters reliably
 
 ---
 
@@ -98,11 +98,10 @@ npm run dev          # http://localhost:5173, proxies /api → http://localhost:
 
 ## Task design
 
-- **5 blocks**, one per agent (A, B, C, D, RNG), order counterbalanced across participants via Latin square
-- **35 trials per block** in Full mode (~4–5 min per block)
+- **8 blocks** per participant: 4 agents the participant had a prior conversation with in the companion chat task (2 "friendly", 2 "neutral"), plus 4 "control" agents they haven't spoken with. Block order and avatar assignment come from `backend/app/rotations/rotation.json`, keyed by config index — the same config index always gets the same order for a given participant.
+- **35 trials per block** in Full mode. At current timing (4s response window + ITI jittered 0–6s + 2s feedback ≈ 9s/trial average), that's ~42 minutes total across 8 blocks — well over the ~10 minute MRI target (see Ongoing Tasks above). `Test` mode (5 trials/block, ~6 min total) is for local/dev checks only, not a real session length.
 - **Points**: +3 win, −3 lose, 0 draw, starting from 100
-- **Agents**: all social agents (A–D) play at the same CHASE level (k=1) with calibrated noise; RNG is purely random
-- Agent order is determined by the rotation config index, so the same participant/index always gets the same order
+- **Agents**: all 8 agents play at the same CHASE level (k=1) with calibrated noise — the friendly/neutral/control manipulation is social framing carried over from the chat task, not a difference in RPS strategy. There is no random/RNG baseline agent.
 
 ---
 
@@ -129,7 +128,7 @@ pip install -r requirements.txt
 ```bash
 python analysis/behavioral.py --db_path backend/rps.db --output_dir results/behavioral/
 ```
-Computes win rate, choice entropy, win-stay/lose-shift, and lag-1 autocorrelation per participant × agent, plus a monotonic gradient test (A > B > C > D > RNG).
+Computes win rate, choice entropy, win-stay/lose-shift, and lag-1 autocorrelation per participant × agent block, plus a monotonic gradient test (friendly > neutral > control).
 
 **Model fitting (CHASE + alternatives):**
 ```bash
