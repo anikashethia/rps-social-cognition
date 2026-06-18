@@ -5,18 +5,19 @@
 /* ── Design tokens ─────────────────────────────────────────────────────────── */
 
 :root {
-  --bg:       #f1f5f9;
+  --bg:       #ffffff;
   --surface:  #ffffff;
   --border:   #e2e8f0;
   --text:     #0f172a;
   --dim:      #64748b;
   --btn:      #1e293b;
-  --win:      #16a34a;
-  --lose:     #dc2626;
-  --draw:     #d97706;
-  --rock:     #78716c;
-  --paper:    #3b82f6;
-  --scissors: #ec4899;
+  --selected: #0f172a;
+  --win:      #0f172a;
+  --lose:     #94a3b8;
+  --draw:     #64748b;
+  --rock:     #475569;
+  --paper:    #475569;
+  --scissors: #475569;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -70,62 +71,33 @@ body {
 /* ── Typography ── */
 
 .tag {
-  font-size: 12px;
-  letter-spacing: 4px;
-  text-transform: uppercase;
+  font-size: 14px;
   color: var(--dim);
 }
 
 .body-text {
-  font-size: 19px;
+  font-size: 20px;
   line-height: 1.8;
-  color: var(--dim);
+  color: var(--text);
   max-width: 620px;
 }
 
 .body-text strong { color: var(--text); }
 
 .hint {
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  font-size: 16px;
+  font-style: italic;
   color: var(--dim);
   margin-top: 4px;
 }
-
-/* ── Rules grid ── */
-
-.rules-grid {
-  display: flex;
-  gap: 12px;
-}
-
-.rule-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 18px 14px;
-  background: var(--surface);
-  font-size: 12px;
-  letter-spacing: 1px;
-  color: var(--dim);
-  line-height: 2;
-  width: 120px;
-}
-
-.rule-card .icon { font-size: 26px; margin-bottom: 6px; }
 
 /* ── Points row ── */
 
 .pts-row { display: flex; gap: 36px; }
 .pts-item { text-align: center; }
-.pts-val { font-size: 22px; margin-bottom: 4px; font-weight: 600; }
-.pts-val.pos  { color: var(--win); }
-.pts-val.neg  { color: var(--lose); }
-.pts-val.zero { color: var(--draw); }
+.pts-val { font-size: 22px; margin-bottom: 4px; font-weight: 600; color: var(--text); }
 .pts-lbl {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  font-size: 13px;
   color: var(--dim);
 }
 
@@ -152,9 +124,7 @@ body {
 }
 
 .agent-name {
-  font-size: 12px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
+  font-size: 15px;
   color: var(--dim);
 }
 
@@ -175,8 +145,7 @@ body {
 }
 
 .progress-label {
-  font-size: 10px;
-  letter-spacing: 2px;
+  font-size: 13px;
   color: var(--dim);
   margin-top: 6px;
   text-align: right;
@@ -193,9 +162,7 @@ body {
 /* ── Choice buttons ── */
 
 .choice-prompt {
-  font-size: 11px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
+  font-size: 16px;
   color: var(--dim);
 }
 
@@ -218,26 +185,22 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: border-color 0.12s, transform 0.12s, box-shadow 0.12s;
+  transition: border-color 0.12s;
 }
 
 .choice-btn:hover {
-  border-color: var(--btn);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-color: var(--selected);
 }
 
 .choice-btn .ci { font-size: 48px; }
 
 .choice-btn .cn {
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  font-size: 14px;
   color: var(--dim);
 }
 
 .choice-btn .ck {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   border: 1px solid var(--border);
   padding: 1px 5px;
@@ -260,9 +223,7 @@ body {
 }
 
 .vs-who {
-  font-size: 10px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
+  font-size: 13px;
   color: var(--dim);
 }
 
@@ -276,19 +237,13 @@ body {
   border-radius: 6px;
   background: var(--surface);
   border: 1px solid var(--border);
-  font-size: 13px;
-  letter-spacing: 1px;
+  font-size: 15px;
+  color: var(--text);
 }
-
-.pill.rock     { border-color: var(--rock);     color: var(--rock); }
-.pill.paper    { border-color: var(--paper);    color: var(--paper); }
-.pill.scissors { border-color: var(--scissors); color: var(--scissors); }
 
 .outcome-badge {
   font-size: 38px;
   font-weight: 700;
-  letter-spacing: 4px;
-  text-transform: uppercase;
 }
 
 .outcome-badge.win     { color: var(--win); }
@@ -298,18 +253,12 @@ body {
 
 .delta {
   font-size: 20px;
-  letter-spacing: 2px;
   font-weight: 600;
+  color: var(--text);
 }
 
-.delta.pos  { color: var(--win); }
-.delta.neg  { color: var(--lose); }
-.delta.zero { color: var(--draw); }
-
 .total-line {
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  font-size: 14px;
   color: var(--dim);
   border-top: 1px solid var(--border);
   padding-top: 14px;
@@ -323,9 +272,7 @@ body {
   position: fixed;
   top: 18px;
   right: 24px;
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  font-size: 13px;
   color: var(--dim);
   text-align: right;
   line-height: 2;
@@ -338,7 +285,6 @@ body {
   font-size: 17px;
   color: var(--text);
   font-weight: 600;
-  letter-spacing: 1px;
 }
 
 /* ── End screen ── */
@@ -347,4 +293,49 @@ body {
   font-size: 68px;
   font-weight: 700;
   color: var(--text);
+}
+
+/* ── Dark intro screens (welcome / rules / scanner-wait) ──────────────────── */
+
+.screen-dark {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.title-dark {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.subtitle-dark {
+  font-size: 20px;
+  font-weight: 400;
+  color: #fff;
+  max-width: 640px;
+  line-height: 1.6;
+}
+
+.hint-dark {
+  font-size: 15px;
+  font-style: italic;
+  color: #94a3b8;
+}
+
+.btn-dark-pill {
+  display: inline-block;
+  background: #fff;
+  color: #000;
+  font-size: 16px;
+  padding: 14px 28px;
+  border-radius: 10px;
 }

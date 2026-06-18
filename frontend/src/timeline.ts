@@ -75,44 +75,36 @@ function avatarHTML(avatarId: string, size = 160): string {
 
 function welcomeHTML(): string {
   return `
-    <div class="screen">
-      <div class="tag">RPS · Social Cognition Task</div>
-      <div class="body-text">
-        Welcome to the next part of the study.<br><br>
-        You will now play <strong>Rock-Paper-Scissors</strong> against
-        several players.
+    <div class="screen-dark">
+      <div class="title-dark">RPS Social Cognition</div>
+      <div class="subtitle-dark">
+        Welcome to the next part of the study! You will now play
+        Rock-Paper-Scissors against several players.
       </div>
-      <div class="hint">press any key to continue</div>
+      <div class="btn-dark-pill">'Press a key' to Continue</div>
     </div>`;
 }
 
 function rulesHTML(): string {
   return `
-    <div class="screen">
-      <div class="tag">How to play</div>
-      <div class="rules-grid">
-        <div class="rule-card"><div class="icon">🪨</div>Rock<br>beats<br>Scissors</div>
-        <div class="rule-card"><div class="icon">✂️</div>Scissors<br>beats<br>Paper</div>
-        <div class="rule-card"><div class="icon">📄</div>Paper<br>beats<br>Rock</div>
+    <div class="screen-dark">
+      <div class="title-dark">How to Play</div>
+      <div class="subtitle-dark">
+        🪨 Rock beats Scissors &nbsp;·&nbsp; ✂️ Scissors beats Paper &nbsp;·&nbsp; 📄 Paper beats Rock
       </div>
-      <div class="body-text">Use keys <strong>1</strong>, <strong>2</strong>, <strong>3</strong> to choose.</div>
-      <div class="pts-row">
-        <div class="pts-item"><div class="pts-val pos">+3</div><div class="pts-lbl">Win</div></div>
-        <div class="pts-item"><div class="pts-val neg">−3</div><div class="pts-lbl">Lose</div></div>
-        <div class="pts-item"><div class="pts-val zero">0</div><div class="pts-lbl">Draw</div></div>
+      <div class="subtitle-dark" style="font-size:16px;">
+        Use keys 1, 2, 3 to choose. Win +3 &nbsp;·&nbsp; Lose &minus;3 &nbsp;·&nbsp; Draw 0
       </div>
-      <div class="hint">press any key to begin</div>
+      <div class="btn-dark-pill">'Press a key' to Begin</div>
     </div>`;
 }
 
 function waitingForScannerHTML(): string {
   return `
-    <div class="screen">
-      <div class="tag">Scanner Sync</div>
-      <div class="body-text" style="font-size:20px;">
-        Waiting for scanner&hellip;
-      </div>
-      <div class="hint">task will begin on first TR (F8)</div>
+    <div class="screen-dark">
+      <div class="title-dark">Scanner Sync</div>
+      <div class="subtitle-dark">Waiting for scanner&hellip;</div>
+      <div class="hint-dark">task will begin on first TR (F8)</div>
     </div>`;
 }
 
@@ -149,10 +141,11 @@ export async function buildTimeline(
   sessionId: number,
   mode: Mode,
   configIndex: number,
+  trialsOverride?: number,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
   const rotation = await getRotation(configIndex);
-  const timings = TIMINGS[mode];
+  const timings = { ...TIMINGS[mode], trials: trialsOverride ?? TIMINGS[mode].trials };
   const blocks = rotation.blocks;
   const totalBlocks = blocks.length;
 

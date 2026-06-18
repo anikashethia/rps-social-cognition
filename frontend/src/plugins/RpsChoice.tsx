@@ -94,9 +94,7 @@ class RpsChoicePlugin implements JsPsychPlugin<Info> {
         `[data-choice="${e.key}"]`,
       ) as HTMLElement | null;
       if (btn) {
-        btn.style.borderColor = "var(--accent)";
-        btn.style.transform = "translateY(-3px)";
-        btn.style.boxShadow = "0 4px 20px rgba(108,142,255,0.25)";
+        btn.style.borderColor = "var(--selected)";
       }
     };
 

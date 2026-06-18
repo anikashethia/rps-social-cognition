@@ -28,10 +28,10 @@ const LABELS: Record<number, string> = { 1: "Rock", 2: "Paper", 3: "Scissors" };
 const ICONS: Record<number, string> = { 1: "🪨", 2: "📄", 3: "✂️" };
 const CLASSES: Record<number, string> = { 1: "rock", 2: "paper", 3: "scissors" };
 const OUTCOME_LABELS: Record<string, string> = {
-  win: "WIN",
-  lose: "LOSE",
-  draw: "DRAW",
-  timeout: "TIME OUT",
+  win: "Win",
+  lose: "Lose",
+  draw: "Draw",
+  timeout: "Time out",
 };
 
 class FeedbackPlugin implements JsPsychPlugin<Info> {
@@ -51,8 +51,8 @@ class FeedbackPlugin implements JsPsychPlugin<Info> {
       // Timeout screen
       display_element.innerHTML = `
         <div class="screen">
-          <div style="color:var(--dim);letter-spacing:3px;font-size:14px;text-transform:uppercase;">
-            TIME OUT
+          <div style="color:var(--dim);font-size:16px;">
+            Time out
           </div>
           <div class="total-line">${ptsCumulative} pts total</div>
         </div>`;
