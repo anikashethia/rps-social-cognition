@@ -52,12 +52,12 @@ rps-social-cognition/
 ## Ongoing Tasks
 
 ### MRI Compatibility
-- [ ] TR trigger sync (using F8)
-- [ ] Onset logging: every trial onset, response, and feedback event should be logged with a session-local t_ms
-- [ ] Jittered ITIs
-- [ ] Ensure current trial count and duration is around ~ 10 minutes or so
-- [ ] Ensure task is fully keypoard-operable (not mouse)
-- [ ] Event logging should be via SQLite DB: every trial needs trial onset t_ms, agent choice, outcome, and response time --> feeds CHASE model
+- [x] TR trigger sync (using F8) — verified in a live scanner-mode test: `tr_number` starts at 0 on the first pulse (the anchor), increments cleanly with no gaps/duplicates on repeated F8 presses
+- [x] Onset logging: every trial onset, response, and feedback event is logged with a session-local t_ms (`onset_ms`, `rt_ms`, `feedback_onset_ms` columns on `trials`)
+- [x] Jittered ITIs (uniform random, see `iti_min`/`iti_max` in `timeline.ts`)
+- [ ] Ensure current trial count and duration is around ~ 10 minutes or so — current Full-mode setting (35 trials × 8 blocks) runs ~42 minutes; awaiting `parameter_recovery.py` results to pick a real count
+- [x] Ensure task is fully keyboard-operable (not mouse) — confirmed: every task screen uses jsPsych keyboard plugins or custom `keydown` listeners; the only mouse (`onClick`) handlers anywhere in the frontend are on the experimenter-facing landing page, not the task itself
+- [x] Event logging via SQLite DB: every trial logs onset t_ms, agent choice, outcome, and response time (see [Data output](#data-output) below)
 
 ### Buergi paper / CHASE model
 - [ ] Confirm what output is needed for CHASE model and GLM
@@ -111,9 +111,17 @@ All session, trial, and trigger data is written directly to the SQLite database 
 
 **`sessions`** — `id`, `participant_id`, `session_number`, `mode`, `config_index`, `created_at`, `anchor_t_ms`
 
-**`trials`** — `id`, `session_id`, `block`, `agent`, `trial_in_block`, `trial_global`, `participant_choice`, `agent_choice`, `outcome`, `points_delta`, `points_cumulative`, `rt_ms`, `onset_ms`, `iti_duration_ms`, `block_onset_ms`, `condition`
+**`trials`** — `id`, `session_id`, `block`, `agent`, `trial_in_block`, `trial_global`, `participant_choice`, `agent_choice`, `outcome`, `points_delta`, `points_cumulative`, `rt_ms`, `onset_ms`, `feedback_onset_ms`, `iti_duration_ms`, `block_onset_ms`, `condition`
 
 **`triggers`** — `id`, `session_id`, `tr_number`, `t_ms` (scanner TR pulses, scanner mode only)
+
+### Clock model
+
+All three tables sit on **one shared, session-local clock** measured in milliseconds — not wall-clock time. In scanner mode, the instant the *first* F8 pulse is detected is `t = 0` (the anchor, stored as `sessions.anchor_t_ms = 0`); in online mode, the anchor is set as soon as the session starts running. Every later timestamp — a trial's `onset_ms`/`feedback_onset_ms`, or a trigger's `t_ms` — is just `performance.now() − anchor` at the moment it happens, sent to the backend, and stored with no further transformation. `feedback_onset_ms` is computed deterministically as `onset_ms + response_window_ms`, since the choice screen always holds for the full response window regardless of when (or whether) the participant responds.
+
+Because trial events and TR pulses share the same clock and the same zero point, aligning behavioral data to scanner pulses at analysis time is direct subtraction — no separate reconciliation step needed. `triggers.tr_number` is 0-indexed, so `tr_number = 0` is always the anchor pulse itself.
+
+Writes happen incrementally as the task runs (each trial/trigger is its own request) rather than being batched and sent at the end, so data already collected survives a browser crash mid-session.
 
 ---
 

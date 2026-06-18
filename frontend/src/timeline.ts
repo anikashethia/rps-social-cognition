@@ -154,17 +154,27 @@ export async function buildTimeline(
   let sessionAnchorMs = 0;
   let points = 100;
   let trialGlobal = 0;
-  let trNumber = 1;
+  let trNumber = 0;
   let currentAgent: Agent | null = null;
   let currentBlockOnsetMs = 0;
   let lastItiMs = 0;
   let lastResult: TrialData | null = null;
 
   // ── F8 trigger listener ────────────────────────────────────────────────
+  // Registered in on_start of the waiting-for-scanner trial (not its
+  // on_finish) so it's already listening before jsPsych's own keyboard
+  // handler engages for that trial — the very first TR, which also dismisses
+  // the trial, is still caught here and logged as tr_number 0, the canonical
+  // anchor. Both listeners fire independently on the same native keydown
+  // event.
 
   function setupTriggerListener() {
     document.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key !== "F8") return;
+      if (mode === "scanner" && trNumber === 0) {
+        sessionAnchorMs = performance.now();
+        setAnchor(sessionId, 0).catch(console.error);
+      }
       const tMs = performance.now() - sessionAnchorMs;
       postTrigger(sessionId, { tr_number: trNumber++, t_ms: tMs }).catch(console.error);
     });
@@ -192,10 +202,7 @@ export async function buildTimeline(
       type: HtmlKeyboardResponsePlugin,
       stimulus: waitingForScannerHTML(),
       choices: ["F8"],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      on_finish: (_data: any) => {
-        sessionAnchorMs = performance.now();
-        setAnchor(sessionId, 0).catch(console.error);
+      on_start: () => {
         setupTriggerListener();
       },
     });
@@ -276,6 +283,7 @@ export async function buildTimeline(
             points_cumulative: points,
             rt_ms: (data.rt_ms as number | null) ?? null,
             onset_ms: data.onset_ms as number,
+            feedback_onset_ms: (data.onset_ms as number) + timings.response_window,
             iti_duration_ms: lastItiMs,
             block_onset_ms: currentBlockOnsetMs,
             condition: block.condition,

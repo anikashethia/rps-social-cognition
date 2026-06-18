@@ -37,6 +37,7 @@ export interface TrialData {
   points_cumulative: number;
   rt_ms: number | null;
   onset_ms: number;
+  feedback_onset_ms: number;
   iti_duration_ms: number;
   block_onset_ms: number;
   condition: string;

@@ -25,6 +25,7 @@ class TrialCreate(BaseModel):
     points_cumulative: int
     rt_ms: float | None = None
     onset_ms: float
+    feedback_onset_ms: float
     iti_duration_ms: float
     block_onset_ms: float
     condition: str  # "friendly", "neutral", "control"
@@ -44,6 +45,7 @@ class TrialOut(BaseModel):
     points_cumulative: int
     rt_ms: float | None
     onset_ms: float
+    feedback_onset_ms: float
     iti_duration_ms: float
     block_onset_ms: float
     condition: str

@@ -43,6 +43,7 @@ class Trial(Base):
     points_cumulative = Column(Integer, nullable=False)
     rt_ms = Column(Float, nullable=True)
     onset_ms = Column(Float, nullable=False)
+    feedback_onset_ms = Column(Float, nullable=False)
     iti_duration_ms = Column(Float, nullable=False)
     block_onset_ms = Column(Float, nullable=False)
     condition = Column(String, nullable=False)  # "friendly", "neutral", "control"
