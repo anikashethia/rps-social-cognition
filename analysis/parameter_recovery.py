@@ -324,11 +324,22 @@ def plot_recovery(df: pd.DataFrame, summary: pd.DataFrame, output_dir: str):
     df20    = df[df["n_trials"] == 20]
     fig, axes = plt.subplots(1, n_params, figsize=(4 * n_params, 4))
 
+    rng = np.random.default_rng(0)
+
     for ax, param in zip(axes, ALL_PARAMS):
         true = df20[f"true_{param}"].values
         rec  = df20[f"recovered_{param}"].values
 
-        ax.scatter(true, rec, alpha=0.4, s=20, color="steelblue")
+        if param == "kappa":
+            # kappa only takes integer values 1-4, so unjittered points stack
+            # exactly on top of each other; jitter is purely visual (the r/RMSE
+            # stats above are computed from the raw, unjittered values).
+            plot_true = true + rng.uniform(-0.15, 0.15, size=len(true))
+            plot_rec  = rec + rng.uniform(-0.15, 0.15, size=len(rec))
+        else:
+            plot_true, plot_rec = true, rec
+
+        ax.scatter(plot_true, plot_rec, alpha=0.4, s=20, color="steelblue")
         mn, mx = min(true.min(), rec.min()), max(true.max(), rec.max())
         ax.plot([mn, mx], [mn, mx], "r--", linewidth=1)
 
