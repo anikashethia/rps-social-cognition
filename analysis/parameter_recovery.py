@@ -102,8 +102,9 @@ def generate_choices(
     kappa = int(round(true_params["kappa"]))
     kappa = max(1, min(kappa, model.max_kappa))
 
-    attractions = np.ones(3) / 3.0
-    beliefs     = np.ones(kappa) / kappa
+    own_attractions = np.ones(3) / 3.0
+    opp_attractions = np.ones(3) / 3.0
+    beliefs         = np.ones(kappa) / kappa
 
     participant_choices = np.zeros(n_trials, dtype=int)
     opponent_choices    = np.zeros(n_trials, dtype=int)
@@ -116,7 +117,7 @@ def generate_choices(
         integrated_opp = np.zeros(3)
         for k in range(kappa):
             integrated_opp += beliefs[k] * model._recursive_probs(
-                attractions, beta, k, lam
+                own_attractions, opp_attractions, beta, k, lam
             )
 
         ev_p   = payoff_scaled @ integrated_opp
@@ -131,12 +132,16 @@ def generate_choices(
 
         # ── Update state ──────────────────────────────────────────────────────
         beliefs, _ = model._belief_update(
-            beliefs, attractions, opp_choice, beta, gamma, lam, kappa
+            beliefs, own_attractions, opp_attractions, opp_choice, beta, gamma, lam, kappa
         )
 
-        indicator      = np.zeros(3)
-        indicator[p_choice] = 1.0
-        attractions   += alpha * (indicator - attractions)
+        own_indicator           = np.zeros(3)
+        own_indicator[p_choice] = 1.0
+        own_attractions        += alpha * (own_indicator - own_attractions)
+
+        opp_indicator              = np.zeros(3)
+        opp_indicator[opp_choice]  = 1.0
+        opp_attractions           += alpha * (opp_indicator - opp_attractions)
 
         opponent.update(opp_choice)
 

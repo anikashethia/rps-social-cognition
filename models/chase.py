@@ -108,28 +108,32 @@ class CHASEModel:
         e = np.exp(z)
         return e / e.sum()
 
-    def _level0_probs(self, attractions: np.ndarray, beta: float) -> np.ndarray:
-        """P(a | k=0) = softmax(beta * attractions)."""
-        return self._softmax(attractions, beta)
-
     def _recursive_probs(
-        self, attractions: np.ndarray, beta: float, level: int, lam: float
+        self, own_attractions: np.ndarray, opp_attractions: np.ndarray,
+        beta: float, level: int, lam: float,
     ) -> np.ndarray:
         """
-        P(a | k=level) via k steps of recursive best-response reasoning.
-        Uses a loss-scaled payoff matrix.
+        P(a | opponent is at reasoning level `level`), built via recursive
+        best-response. Even levels chain from the opponent's own attractions
+        (their non-strategic habit); odd levels chain from the participant's
+        own attractions (a level-1 opponent assumes the participant is
+        non-strategic and predicts them via the participant's own habit).
+        Matches Buergi et al.'s two-track recursion (their f_mat_other /
+        f_mat_own) — RPS's symmetric payoff matrix makes pi_own == pi_other,
+        so levels >= 2 are pure alternating recursion from these two seeds.
         """
         payoff = self.PAYOFF.copy()
         payoff[payoff == -1] *= lam  # Loss sensitivity
 
-        probs = self._level0_probs(attractions, beta)
+        seed  = opp_attractions if level % 2 == 0 else own_attractions
+        probs = self._softmax(seed, beta)
         for _ in range(level):
             ev    = payoff @ probs
             probs = self._softmax(ev, beta)
         return probs
 
     def _belief_update(
-        self, prior: np.ndarray, attractions: np.ndarray,
+        self, prior: np.ndarray, own_attractions: np.ndarray, opp_attractions: np.ndarray,
         opp_action: int, beta: float, gamma: float, lam: float, kappa: int,
     ) -> Tuple[np.ndarray, float]:
         """
@@ -140,9 +144,8 @@ class CHASEModel:
             bu: KL divergence between posterior and prior
         """
         # Likelihood L(k | opp_action) for k in 0..kappa-1
-        # (opponent is modeled as one level lower than participant's current belief)
         likelihood = np.array([
-            self._recursive_probs(attractions, beta, k, lam)[opp_action]
+            self._recursive_probs(own_attractions, opp_attractions, beta, k, lam)[opp_action]
             for k in range(kappa)
         ])
 
@@ -179,9 +182,10 @@ class CHASEModel:
         kappa = int(round(params["kappa"]))
         kappa = max(1, min(kappa, self.max_kappa))
 
-        T          = len(choices)
-        attractions = np.ones(self.N_ACTIONS) / self.N_ACTIONS  # Uniform init
-        beliefs     = np.ones(kappa) / kappa                    # Uniform prior
+        T               = len(choices)
+        own_attractions = np.ones(self.N_ACTIONS) / self.N_ACTIONS  # Uniform init
+        opp_attractions = np.ones(self.N_ACTIONS) / self.N_ACTIONS  # Uniform init
+        beliefs         = np.ones(kappa) / kappa                    # Uniform prior
 
         all_beliefs  = np.zeros((T, kappa))
         all_bu       = np.zeros(T)
@@ -197,7 +201,7 @@ class CHASEModel:
             # Integrated prediction over opponent levels
             integrated_opp_probs = np.zeros(self.N_ACTIONS)
             for k in range(kappa):
-                opp_probs_k          = self._recursive_probs(attractions, beta, k, lam)
+                opp_probs_k          = self._recursive_probs(own_attractions, opp_attractions, beta, k, lam)
                 integrated_opp_probs += beliefs[k] * opp_probs_k
 
             # Participant best-responds to integrated prediction
@@ -218,15 +222,19 @@ class CHASEModel:
 
             # Belief update (A3): Bayes update on opponent level
             beliefs, bu = self._belief_update(
-                beliefs, attractions, opp_choice, beta, gamma, lam, kappa
+                beliefs, own_attractions, opp_attractions, opp_choice, beta, gamma, lam, kappa
             )
             all_beliefs[t] = beliefs
             all_bu[t]      = bu
 
-            # Update attractions (A1): delta rule on participant's own choices
-            indicator = np.zeros(self.N_ACTIONS)
-            indicator[p_choice] = 1.0
-            attractions += alpha * (indicator - attractions)
+            # Update attractions (A1): delta rule, tracked separately for each player
+            own_indicator = np.zeros(self.N_ACTIONS)
+            own_indicator[p_choice] = 1.0
+            own_attractions += alpha * (own_indicator - own_attractions)
+
+            opp_indicator = np.zeros(self.N_ACTIONS)
+            opp_indicator[opp_choice] = 1.0
+            opp_attractions += alpha * (opp_indicator - opp_attractions)
 
         result = CHASEResult(
             alpha=alpha, beta=beta, gamma=gamma, lam=lam, kappa=kappa,
