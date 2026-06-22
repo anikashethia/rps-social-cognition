@@ -55,13 +55,34 @@ rps-social-cognition/
 - [x] TR trigger sync (using F8) — verified in a live scanner-mode test: `tr_number` starts at 0 on the first pulse (the anchor), increments cleanly with no gaps/duplicates on repeated F8 presses
 - [x] Onset logging: every trial onset, response, and feedback event is logged with a session-local t_ms (`onset_ms`, `rt_ms`, `feedback_onset_ms` columns on `trials`)
 - [x] Jittered ITIs (uniform random, see `iti_min`/`iti_max` in `timeline.ts`)
-- [ ] Ensure current trial count and duration is around ~ 10 minutes or so — current Full-mode setting (35 trials × 8 blocks) runs ~42 minutes; awaiting `parameter_recovery.py` results to pick a real count
+- [ ] Ensure current trial count and duration is around ~ 10 minutes or so — current Full-mode setting (35 trials × 8 blocks) runs ~42 minutes. Parameter recovery results point to **25 trials/block (~30–33 min total)** as the best tradeoff (see below) — still over the ~10 min target, but not yet changed in code pending final sign-off
 - [x] Ensure task is fully keyboard-operable (not mouse) — confirmed: every task screen uses jsPsych keyboard plugins or custom `keydown` listeners; the only mouse (`onClick`) handlers anywhere in the frontend are on the experimenter-facing landing page, not the task itself
 - [x] Event logging via SQLite DB: every trial logs onset t_ms, agent choice, outcome, and response time (see [Data output](#data-output) below)
 
 ### Buergi paper / CHASE model
 - [ ] Confirm what output is needed for CHASE model and GLM
-- [ ] Confirm trial count per block — current Full-mode setting (35 trials × 8 blocks) runs ~42 minutes, far over the ~10 minute target above; awaiting `analysis/parameter_recovery.py` results to pick a count that's both fast enough and recovers CHASE parameters reliably
+- [x] Confirm trial count per block — **25 trials/block (~30–33 min total)** is the recommended setting; not yet applied in `timeline.ts` pending sign-off
+
+`models/chase.py` originally used a single shared "attraction" history for both players wherever it needed to predict opponent behavior at a given reasoning level. Cross-checking against Buergi et al.'s original MATLAB source (`reference/buergi_chase_matlab/`) confirmed the published model tracks **two separate histories** (`f_mat_own` / `f_mat_other`) — one updated from the participant's own choices, one from the opponent's — and seeds even/odd reasoning levels from each respectively. Fixed in `models/chase.py` and `analysis/parameter_recovery.py`.
+
+Parameter recovery (100 sims × 6 trial counts), before → after the fix:
+
+| n_trials | alpha | beta | gamma | **kappa** | lambda |
+|---|---|---|---|---|---|
+| 10 | 0.61 → 0.55 | 0.47 → 0.58 | 0.13 → 0.07 | 0.40 → **0.70** | 0.31 → 0.40 |
+| 15 | 0.55 → 0.50 | 0.53 → 0.69 | 0.05 → 0.10 | 0.38 → **0.54** | 0.06 → 0.33 |
+| 20 | 0.54 → 0.65 | 0.55 → 0.66 | 0.12 → 0.31 | 0.57 → **0.76** | 0.34 → 0.29 |
+| **25** | 0.76 → 0.76 | 0.64 → 0.57 | 0.06 → 0.33 | 0.61 → **0.84** | 0.30 → 0.39 |
+| 30 | 0.70 → 0.76 | 0.54 → 0.70 | 0.43 → 0.25 | 0.59 → **0.76** | 0.30 → 0.46 |
+| 40 | 0.58 → 0.54 | 0.65 → 0.71 | 0.20 → 0.30 | 0.53 → **0.79** | 0.30 → 0.31 |
+
+(Pearson r between true and recovered parameters; see `results/recovery/` for raw output, `results/recovery_pre_fix/` for the before-fix run.)
+
+- **kappa** — the parameter of primary interest — improved substantially (r=0.40–0.61 → r=0.70–0.84), with 25 trials/block now hitting r=0.84, 75% exact matches, 96% within one level.
+- **gamma** went from statistical noise to a weak-but-significant signal (still well short of the original paper's reported r=0.73–1.0 for all parameters).
+- **alpha**, **beta**, **lambda** all improved modestly and fairly consistently.
+
+Gamma and kappa's remaining ceiling is likely driven by task design, not implementation: in Buergi et al.'s task, the bot's reasoning level genuinely varies across blocks (0/1/2, rotated), giving `gamma` (sensitivity to evidence about the opponent's level) something real to track. In this task, every agent plays at a constant CHASE level 1 (`agents.ts`) — the manipulation here is social/friendliness framing, not opponent sophistication. Whether to introduce varying opponent levels (and how to do so without confounding it with the friendly/neutral/control conditions) is an open design question, not a code fix.
 
 ---
 
