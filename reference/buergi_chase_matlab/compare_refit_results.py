@@ -65,10 +65,50 @@ for row, est_prefix, label in [(0, "matlab", "MATLAB (theirs)"), (1, "our", "Pyt
         if row == 1:
             ax.set_xlabel("Generating")
 
+fig.suptitle("All 192 sims (includes kappa=0 ground truth, which our model cannot represent)", fontsize=12)
 plt.tight_layout()
 out_path = os.path.join(os.path.dirname(__file__), "compare_refit_results.png")
 plt.savefig(out_path, dpi=150)
 print(f"Saved -> {out_path}\n")
+
+# ── Second figure: restricted to true kappa >= 1 (the regime we implement) ──
+df_sub = df[df["gen_kappa"] >= 1].copy()
+df_sub.loc[df_sub["matlab_kappa"] < 2, "matlab_gamma"] = np.nan
+df_sub.loc[df_sub["our_kappa"]    < 2, "our_gamma"]    = np.nan
+df_sub.loc[df_sub["matlab_kappa"] == 0, "matlab_lam"]  = np.nan
+df_sub.loc[df_sub["our_kappa"]    == 0, "our_lam"]     = np.nan
+
+fig2, axes2 = plt.subplots(2, 5, figsize=(18, 7))
+for row, est_prefix, label in [(0, "matlab", "MATLAB (theirs)"), (1, "our", "Python (ours)")]:
+    for col, p in enumerate(PARAMS):
+        ax = axes2[row, col]
+        lims = LIMS[p]
+        ax.plot(lims, lims, "--", color="gray", linewidth=1)
+
+        x = df_sub[f"gen_{p}"].values
+        y = df_sub[f"{est_prefix}_{p}"].values
+
+        if p == "kappa":
+            nx = rng.normal(0, 0.15, size=len(x))
+            ny = rng.normal(0, 0.15, size=len(y))
+            ax.scatter(x + nx, y + ny, alpha=0.25, s=30, color="steelblue", edgecolors="none")
+        else:
+            ax.scatter(x, y, alpha=0.25, s=30, color="steelblue", edgecolors="none")
+
+        r, n = pairwise_pearson(x, y)
+        ax.set_title(f"{p}\nr = {r:.2f} (n={n})", fontsize=10)
+        ax.set_xlim(lims); ax.set_ylim(lims)
+        ax.set_aspect("equal")
+        if col == 0:
+            ax.set_ylabel(f"{label}\nRecovered")
+        if row == 1:
+            ax.set_xlabel("Generating")
+
+fig2.suptitle("Restricted to true kappa >= 1 (n=144) -- the regime our model actually implements", fontsize=12)
+plt.tight_layout()
+out_path2 = os.path.join(os.path.dirname(__file__), "compare_refit_results_kappa_geq1.png")
+plt.savefig(out_path2, dpi=150)
+print(f"Saved -> {out_path2}\n")
 
 print("All 192 sims (includes kappa=0 ground truth, which our model cannot represent):")
 print(f"{'param':<8}{'MATLAB r':>10}{'(n)':>6}{'Python r':>12}{'(n)':>6}")
