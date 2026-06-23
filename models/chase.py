@@ -170,10 +170,18 @@ class CHASEModel:
         params:           dict,
         choices:          np.ndarray,       # Participant choices, 0-indexed, shape (T,)
         opponent_choices: np.ndarray,       # Opponent choices, 0-indexed, shape (T,)
+        trial_in_block:   Optional[np.ndarray] = None,  # 1-indexed trial-within-block, shape (T,)
     ) -> CHASEResult:
         """
         Run the CHASE model forward given parameters and observed choices.
         Returns a CHASEResult with trial-by-trial estimates.
+
+        If `trial_in_block` is given, attractions and beliefs are reset to
+        uniform whenever trial_in_block[t] == 1 (t > 0) -- i.e. at the start
+        of each new block within a multi-block sequence, matching Buergi et
+        al.'s "reset all relevant prior belief variables... to a uniform
+        distribution at the beginning of each block" (fit jointly as one set
+        of parameters per participant, across blocks).
         """
         alpha = params["alpha"]
         beta  = params["beta"]
@@ -182,10 +190,16 @@ class CHASEModel:
         kappa = int(round(params["kappa"]))
         kappa = max(1, min(kappa, self.max_kappa))
 
-        T               = len(choices)
-        own_attractions = np.ones(self.N_ACTIONS) / self.N_ACTIONS  # Uniform init
-        opp_attractions = np.ones(self.N_ACTIONS) / self.N_ACTIONS  # Uniform init
-        beliefs         = np.ones(kappa) / kappa                    # Uniform prior
+        T = len(choices)
+
+        def uniform_state():
+            return (
+                np.ones(self.N_ACTIONS) / self.N_ACTIONS,
+                np.ones(self.N_ACTIONS) / self.N_ACTIONS,
+                np.ones(kappa) / kappa,
+            )
+
+        own_attractions, opp_attractions, beliefs = uniform_state()
 
         all_beliefs  = np.zeros((T, kappa))
         all_bu       = np.zeros(T)
@@ -194,6 +208,9 @@ class CHASEModel:
         all_ape      = np.zeros(T)
 
         for t in range(T):
+            if trial_in_block is not None and t > 0 and trial_in_block[t] == 1:
+                own_attractions, opp_attractions, beliefs = uniform_state()
+
             p_choice   = choices[t]
             opp_choice = opponent_choices[t]
 
@@ -254,9 +271,10 @@ class CHASEModel:
         params:           dict,
         choices:          np.ndarray,
         opponent_choices: np.ndarray,
+        trial_in_block:   Optional[np.ndarray] = None,
     ) -> float:
         """Compute negative log-likelihood of participant choices under CHASE."""
-        result = self.simulate(params, choices, opponent_choices)
+        result = self.simulate(params, choices, opponent_choices, trial_in_block)
         eps    = 1e-12
         ll     = np.sum(np.log(result.action_probs[np.arange(len(choices)), choices] + eps))
         return float(ll)
@@ -269,6 +287,7 @@ class CHASEModel:
         opponent_choices: np.ndarray,
         n_restarts:       int = 10,
         seed:             Optional[int] = None,
+        trial_in_block:   Optional[np.ndarray] = None,
     ) -> CHASEResult:
         """
         Fit CHASE parameters via maximum likelihood estimation.
@@ -282,6 +301,10 @@ class CHASEModel:
             Opponent's choices, 0-indexed.
         n_restarts : int
             Number of random restarts.
+        trial_in_block : np.ndarray, shape (T,), optional
+            1-indexed trial-within-block counter. If given, attractions and
+            beliefs reset to uniform at the start of each new block (matches
+            Buergi et al.'s joint per-participant, per-block-reset fitting).
 
         Returns
         -------
@@ -322,7 +345,7 @@ class CHASEModel:
                         "gamma": x[2], "lam":  x[3],
                         "kappa": kappa_try,
                     }
-                    return -self.log_likelihood(params, choices, opponent_choices)
+                    return -self.log_likelihood(params, choices, opponent_choices, trial_in_block)
 
                 x0     = [p0["alpha"], p0["beta"], p0["gamma"], p0["lam"]]
                 bounds = [
@@ -345,7 +368,7 @@ class CHASEModel:
                         "gamma": opt.x[2], "lam":  opt.x[3],
                         "kappa": kappa_try,
                     }
-                    ll = self.log_likelihood(fitted, choices, opponent_choices)
+                    ll = self.log_likelihood(fitted, choices, opponent_choices, trial_in_block)
 
                     if ll > best_ll:
                         best_ll     = ll
@@ -361,7 +384,7 @@ class CHASEModel:
             return CHASEResult()
 
         # Run forward pass with best parameters to get trial-by-trial outputs
-        result = self.simulate(best_params, choices, opponent_choices)
+        result = self.simulate(best_params, choices, opponent_choices, trial_in_block)
         result.log_likelihood = best_ll
         result.aic            = -2 * best_ll + 2 * (self.N_PARAMS - 1)  # kappa is discrete
         result.converged      = True
