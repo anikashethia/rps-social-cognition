@@ -1,11 +1,16 @@
 """Session management endpoints."""
 
+import json
+import os
+
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
 
 from ..database import get_db
-from ..models import Session
+from ..models import ParticipantRegistration, Session
+
+_ROTATION_FILE = os.path.join(os.path.dirname(__file__), "../rotations/rotation.json")
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -97,3 +102,60 @@ def get_session(session_id: int, db: DBSession = Depends(get_db)):
         created_at=session.created_at.isoformat(),
         anchor_t_ms=session.anchor_t_ms,
     )
+
+
+class ResolvedBlock(BaseModel):
+    avatar_id: str
+    condition: str
+    level: int
+
+
+class SessionRotation(BaseModel):
+    blocks: list[ResolvedBlock]
+
+
+@router.get("/{session_id}/rotation", response_model=SessionRotation)
+def get_session_rotation(session_id: int, db: DBSession = Depends(get_db)):
+    """
+    Return the resolved block schedule for this session.
+    Combines the config's (condition, level) ordering with the participant's
+    registered friendly/neutral avatar IDs.
+    """
+    session = db.get(Session, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    reg = db.get(ParticipantRegistration, session.participant_id)
+    if reg is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Participant '{session.participant_id}' has no avatar registration. "
+                "Register them at POST /api/participants/{id}/registration before starting."
+            ),
+        )
+
+    with open(_ROTATION_FILE) as f:
+        rotation_data = json.load(f)
+
+    config = rotation_data.get("configs", {}).get(str(session.config_index))
+    if config is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Config index {session.config_index} not found in rotation table",
+        )
+
+    avatar_map = {
+        "friendly": reg.friendly_avatar_id,
+        "neutral": reg.neutral_avatar_id,
+    }
+
+    blocks = [
+        ResolvedBlock(
+            avatar_id=avatar_map[b["condition"]],
+            condition=b["condition"],
+            level=b["level"],
+        )
+        for b in config["blocks"]
+    ]
+    return SessionRotation(blocks=blocks)

@@ -12,12 +12,11 @@ _ROTATION_FILE = os.path.join(os.path.dirname(__file__), "../rotations/rotation.
 
 
 class BlockConfig(BaseModel):
-    avatar_id: str
     condition: str
+    level: int
 
 
 class RotationConfig(BaseModel):
-    set: int
     blocks: list[BlockConfig]
 
 
@@ -31,4 +30,4 @@ def get_rotation(config_index: int):
             status_code=404,
             detail=f"Config index {config_index} not found in rotation table",
         )
-    return RotationConfig(**config)
+    return RotationConfig(blocks=config["blocks"])

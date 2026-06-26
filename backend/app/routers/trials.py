@@ -28,7 +28,8 @@ class TrialCreate(BaseModel):
     feedback_onset_ms: float
     iti_duration_ms: float
     block_onset_ms: float
-    condition: str  # "friendly", "neutral", "control"
+    condition: str  # "friendly" or "neutral"
+    level: int | None = None  # CHASE level (0, 1, or 2)
 
 
 class TrialOut(BaseModel):
@@ -49,6 +50,7 @@ class TrialOut(BaseModel):
     iti_duration_ms: float
     block_onset_ms: float
     condition: str
+    level: int | None
 
     model_config = {"from_attributes": True}
 

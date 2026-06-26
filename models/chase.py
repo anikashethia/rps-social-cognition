@@ -36,7 +36,7 @@ PARAM_BOUNDS = {
     "beta":   (0.01, 20.0),          # Softmax inverse temperature
     "gamma":  (0.01, 20.0),          # Sensitivity to opponent-level evidence
     "lam":    (0.1,  5.0),           # Loss sensitivity (lambda; renamed to avoid builtin)
-    "kappa":  (1,    4),             # Max sophistication level (integer, fitted as continuous then rounded)
+    "kappa":  (0,    4),             # Max sophistication level (integer, fitted via discrete sweep). kappa=0 is the egocentric/non-strategic case.
 }
 
 PARAM_INIT = {
@@ -188,24 +188,28 @@ class CHASEModel:
         gamma = params["gamma"]
         lam   = params["lam"]
         kappa = int(round(params["kappa"]))
-        kappa = max(1, min(kappa, self.max_kappa))
+        kappa = max(0, min(kappa, self.max_kappa))
 
         T = len(choices)
+        n_belief_levels = max(kappa, 1)  # kappa=0 has no belief levels; keep array shape sane
 
         def uniform_state():
             return (
                 np.ones(self.N_ACTIONS) / self.N_ACTIONS,
                 np.ones(self.N_ACTIONS) / self.N_ACTIONS,
-                np.ones(kappa) / kappa,
+                np.ones(n_belief_levels) / n_belief_levels,
             )
 
         own_attractions, opp_attractions, beliefs = uniform_state()
 
-        all_beliefs  = np.zeros((T, kappa))
-        all_bu       = np.zeros(T)
+        all_beliefs  = np.full((T, n_belief_levels), np.nan)
+        all_bu       = np.full(T, np.nan)
         all_probs    = np.zeros((T, self.N_ACTIONS))
         all_cv       = np.zeros(T)
         all_ape      = np.zeros(T)
+
+        payoff_scaled = self.PAYOFF.copy()
+        payoff_scaled[payoff_scaled == -1] *= lam
 
         for t in range(T):
             if trial_in_block is not None and t > 0 and trial_in_block[t] == 1:
@@ -215,19 +219,26 @@ class CHASEModel:
             opp_choice = opponent_choices[t]
 
             # ── Choice phase ─────────────────────────────────────────────────
-            # Integrated prediction over opponent levels
-            integrated_opp_probs = np.zeros(self.N_ACTIONS)
-            for k in range(kappa):
-                opp_probs_k          = self._recursive_probs(own_attractions, opp_attractions, beta, k, lam)
-                integrated_opp_probs += beliefs[k] * opp_probs_k
+            if kappa == 0:
+                # Egocentric / non-strategic: ignore the opponent entirely.
+                # No payoff matrix, no opponent prediction -- matches Buergi
+                # et al.'s static branch k=0 case (subj_resp = softmax(f_mat_own)).
+                # subj_pred is conventionally uniform here, used only for the
+                # APE/SV bookkeeping below, never for the actual choice.
+                integrated_opp_probs = np.ones(self.N_ACTIONS) / self.N_ACTIONS
+                action_probs = self._softmax(own_attractions, beta)
+                ev_participant = payoff_scaled @ integrated_opp_probs
+            else:
+                # Integrated prediction over opponent levels
+                integrated_opp_probs = np.zeros(self.N_ACTIONS)
+                for k in range(kappa):
+                    opp_probs_k          = self._recursive_probs(own_attractions, opp_attractions, beta, k, lam)
+                    integrated_opp_probs += beliefs[k] * opp_probs_k
 
-            # Participant best-responds to integrated prediction
-            payoff_scaled = self.PAYOFF.copy()
-            payoff_scaled[payoff_scaled == -1] *= lam
-            ev_participant = payoff_scaled @ integrated_opp_probs
+                # Participant best-responds to integrated prediction
+                ev_participant = payoff_scaled @ integrated_opp_probs
+                action_probs   = self._softmax(ev_participant, beta)
 
-            # Choice probabilities P(a | kappa)
-            action_probs = self._softmax(ev_participant, beta)
             all_probs[t] = action_probs
 
             # Choice value: expected payoff of chosen action
@@ -237,12 +248,16 @@ class CHASEModel:
             # Action prediction error: deviation of opponent action from prediction
             all_ape[t] = float(1.0 - integrated_opp_probs[opp_choice])
 
-            # Belief update (A3): Bayes update on opponent level
-            beliefs, bu = self._belief_update(
-                beliefs, own_attractions, opp_attractions, opp_choice, beta, gamma, lam, kappa
-            )
-            all_beliefs[t] = beliefs
-            all_bu[t]      = bu
+            # Belief update (A3): Bayes update on opponent level.
+            # Only defined when kappa >= 2 (matches Buergi et al.: belief
+            # tracking doesn't exist at all for kappa < 2 -- output stays NaN,
+            # not a degenerate placeholder).
+            if kappa >= 2:
+                beliefs, bu = self._belief_update(
+                    beliefs, own_attractions, opp_attractions, opp_choice, beta, gamma, lam, kappa
+                )
+                all_beliefs[t] = beliefs
+                all_bu[t]      = bu
 
             # Update attractions (A1): delta rule, tracked separately for each player
             own_indicator = np.zeros(self.N_ACTIONS)
@@ -253,6 +268,10 @@ class CHASEModel:
             opp_indicator[opp_choice] = 1.0
             opp_attractions += alpha * (opp_indicator - opp_attractions)
 
+        inferred_level = (
+            np.full(T, np.nan) if kappa < 2 else np.argmax(all_beliefs, axis=1).astype(float)
+        )
+
         result = CHASEResult(
             alpha=alpha, beta=beta, gamma=gamma, lam=lam, kappa=kappa,
             beliefs       = all_beliefs,
@@ -260,7 +279,7 @@ class CHASEModel:
             action_probs   = all_probs,
             choice_values  = all_cv,
             ape            = all_ape,
-            inferred_level = np.argmax(all_beliefs, axis=1),
+            inferred_level = inferred_level,
         )
         return result
 
@@ -331,12 +350,12 @@ class CHASEModel:
                     "beta":  rng.uniform(*PARAM_BOUNDS["beta"]),
                     "gamma": rng.uniform(*PARAM_BOUNDS["gamma"]),
                     "lam":   rng.uniform(*PARAM_BOUNDS["lam"]),
-                    "kappa": rng.integers(1, self.max_kappa + 1),
+                    "kappa": rng.integers(0, self.max_kappa + 1),
                 }
 
             # Optimise over continuous params (alpha, beta, gamma, lam)
-            # kappa is treated as a discrete grid search
-            for kappa_try in range(1, self.max_kappa + 1):
+            # kappa is treated as a discrete grid search (0 = egocentric/non-strategic)
+            for kappa_try in range(0, self.max_kappa + 1):
                 p0["kappa"] = kappa_try
 
                 def neg_ll(x):

@@ -41,21 +41,34 @@ export interface TrialData {
   iti_duration_ms: number;
   block_onset_ms: number;
   condition: string;
+  level: number | null;
 }
 
 export interface BlockConfig {
   avatar_id: string;
   condition: string;
+  level: number;
 }
 
-export interface RotationConfig {
-  set: number;
+export interface SessionRotation {
   blocks: BlockConfig[];
+}
+
+export interface RegistrationOut {
+  participant_id: string;
+  friendly_avatar_id: string;
+  neutral_avatar_id: string;
+  registered_at: string;
 }
 
 export interface TrialOut extends TrialData {
   id: number;
   session_id: number;
+}
+
+/** @deprecated Use getSessionRotation instead */
+export async function getRotation(_configIndex: number): Promise<never> {
+  throw new Error("getRotation is deprecated — use getSessionRotation(sessionId)");
 }
 
 export interface TriggerData {
@@ -77,6 +90,16 @@ async function post<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`POST ${url} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function put<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PUT ${url} → ${res.status}`);
   return res.json() as Promise<T>;
 }
 
@@ -124,8 +147,23 @@ export async function postTrial(
   return post<TrialOut>(`/api/sessions/${sessionId}/trials`, trial);
 }
 
-export async function getRotation(configIndex: number): Promise<RotationConfig> {
-  return get<RotationConfig>(`/api/rotations/${configIndex}`);
+export async function getSessionRotation(sessionId: number): Promise<SessionRotation> {
+  return get<SessionRotation>(`/api/sessions/${sessionId}/rotation`);
+}
+
+export async function getRegistration(participantId: string): Promise<RegistrationOut> {
+  return get<RegistrationOut>(`/api/participants/${encodeURIComponent(participantId)}/registration`);
+}
+
+export async function upsertRegistration(
+  participantId: string,
+  friendlyAvatarId: string,
+  neutralAvatarId: string,
+): Promise<RegistrationOut> {
+  return put<RegistrationOut>(
+    `/api/participants/${encodeURIComponent(participantId)}/registration`,
+    { friendly_avatar_id: friendlyAvatarId, neutral_avatar_id: neutralAvatarId },
+  );
 }
 
 export async function postTrigger(

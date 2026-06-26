@@ -10,6 +10,19 @@ class Base(DeclarativeBase):
     pass
 
 
+class ParticipantRegistration(Base):
+    """IOS-based avatar assignment for each participant (set once after chat task)."""
+
+    __tablename__ = "participant_registrations"
+
+    participant_id = Column(String, primary_key=True)
+    friendly_avatar_id = Column(String, nullable=False)  # highest IOS score
+    neutral_avatar_id = Column(String, nullable=False)   # lowest IOS score
+    registered_at = Column(
+        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class Session(Base):
     __tablename__ = "sessions"
 
@@ -46,7 +59,8 @@ class Trial(Base):
     feedback_onset_ms = Column(Float, nullable=False)
     iti_duration_ms = Column(Float, nullable=False)
     block_onset_ms = Column(Float, nullable=False)
-    condition = Column(String, nullable=False)  # "friendly", "neutral", "control"
+    condition = Column(String, nullable=False)  # "friendly" or "neutral"
+    level = Column(Integer, nullable=True)  # CHASE level (0, 1, or 2)
 
     session = relationship("Session", back_populates="trials")
 

@@ -6,7 +6,7 @@
  */
 
 import HtmlKeyboardResponsePlugin from "@jspsych/plugin-html-keyboard-response";
-import { getRotation, postTrial, postTrigger, setAnchor, type BlockConfig, type TrialData } from "./api";
+import { getSessionRotation, postTrial, postTrigger, setAnchor, type BlockConfig, type TrialData } from "./api";
 import { buildAgent, type Agent } from "./agents";
 import FixationPlugin from "./plugins/Fixation";
 import RpsChoicePlugin from "./plugins/RpsChoice";
@@ -24,8 +24,8 @@ const TIMINGS: Record<Mode, {
   feedback: number;
 }> = {
   dev:        { trials: 5,  iti_min: 0, iti_max: 1000, response_window: 4000, feedback: 2000 },
-  behavioral: { trials: 20, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
-  scanner:    { trials: 20, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
+  behavioral: { trials: 40, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
+  scanner:    { trials: 40, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
 };
 
 // ── Game logic ───────────────────────────────────────────────────────────────
@@ -140,14 +140,13 @@ function endHTML(pts: number): string {
 export async function buildTimeline(
   sessionId: number,
   mode: Mode,
-  configIndex: number,
   trialsOverride?: number,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-  const rotation = await getRotation(configIndex);
+  const rotation = await getSessionRotation(sessionId);
   const timings = { ...TIMINGS[mode], trials: trialsOverride ?? TIMINGS[mode].trials };
   const blocks = rotation.blocks;
-  const totalBlocks = blocks.length;
+  const totalBlocks = blocks.length;  // 6 blocks
 
   // ── Mutable session state ──────────────────────────────────────────────
 
@@ -230,7 +229,7 @@ export async function buildTimeline(
       stimulus: () => blockIntroHTML(block, blockNum, totalBlocks),
       choices: "ALL_KEYS",
       on_start: () => {
-        currentAgent = buildAgent(block.avatar_id, configIndex * 1000 + b);
+        currentAgent = buildAgent(block.avatar_id, block.level, sessionId * 1000 + b);
         updateHUD(blockNum, totalBlocks, points);
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -287,6 +286,7 @@ export async function buildTimeline(
             iti_duration_ms: lastItiMs,
             block_onset_ms: currentBlockOnsetMs,
             condition: block.condition,
+            level: block.level,
           };
 
           updateHUD(blockNum, totalBlocks, points);

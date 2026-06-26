@@ -1,242 +1,73 @@
 {
-  "_note": "PLACEHOLDER — replace with the counterbalanced rotation table generated from the mentor's task once finalized. Each config index maps to one participant's assignment: which set of 8 avatars they see, each avatar's condition (friendly/neutral/control), and the order blocks are presented in the RPS task. The config index must match the one entered in the mentor's chat task for the same participant.",
+  "_note": "Block-order configs for the 6-block RPS design (2 agents × 3 CHASE levels). Avatar IDs are resolved at runtime from the participant's registration (IOS-based friendly/neutral assignment via /api/participants/{id}/registration). The config index determines block ordering only.",
 
-  "_naming_convention": {
-    "format": "s#f/m#",
-    "examples": {
-      "s1f1": "set 1, female, white",
-      "s1m1": "set 1, male, white",
-      "s1f2": "set 1, female, east asian",
-      "s1m2": "set 1, male, east asian",
-      "s1f3": "set 1, female, hispanic/south asian",
-      "s1m3": "set 1, male, hispanic/south asian",
-      "s1f4": "set 1, female, black",
-      "s1m4": "set 1, male, black",
-      "s2f1": "set 2, female, white",
-      "s2m1": "set 2, male, white",
-      "s2f2": "set 2, female, east asian",
-      "s2m2": "set 2, male, east asian",
-      "s2f3": "set 2, female, hispanic/south asian",
-      "s2m3": "set 2, male, hispanic/south asian",
-      "s2f4": "set 2, female, black",
-      "s2m4": "set 2, male, black"
-    }
-  },
+  "_design": "6 blocks: 1 friendly agent + 1 neutral agent (selected via IOS self-other overlap), each played at CHASE levels 0, 1, and 2. Block order is counterbalanced across participants via config index (6 configs, cycling through participants).",
 
   "_structure": {
-    "set": "1 or 2 — which pool of 8 avatars this participant draws from",
-    "blocks": "ordered array of 8 entries; array order = block presentation order in the RPS task",
-    "blocks[].avatar_id": "avatar filename stem (e.g. s1f1) — append file extension as needed",
-    "blocks[].condition": "friendly | neutral | control"
+    "blocks": "ordered array of 6 entries; array order = block presentation order in the RPS task",
+    "blocks[].condition": "friendly | neutral — resolved to avatar_id at runtime from participant registration",
+    "blocks[].level": "CHASE level for the opponent agent in this block (0 = egocentric/non-strategic, 1 = level-1, 2 = level-2)"
   },
 
   "configs": {
     "1": {
-      "set": 1,
       "blocks": [
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1m1", "condition": "control"  },
-        { "avatar_id": "s1m2", "condition": "friendly" },
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1f3", "condition": "neutral"  },
-        { "avatar_id": "s1m3", "condition": "control"  },
-        { "avatar_id": "s1m4", "condition": "neutral"  },
-        { "avatar_id": "s1f4", "condition": "control"  }
+        { "condition": "friendly", "level": 0 },
+        { "condition": "neutral",  "level": 1 },
+        { "condition": "friendly", "level": 2 },
+        { "condition": "neutral",  "level": 0 },
+        { "condition": "friendly", "level": 1 },
+        { "condition": "neutral",  "level": 2 }
       ]
     },
     "2": {
-      "set": 1,
       "blocks": [
-        { "avatar_id": "s1m2", "condition": "friendly" },
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1m4", "condition": "neutral"  },
-        { "avatar_id": "s1f4", "condition": "control"  },
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1m1", "condition": "control"  },
-        { "avatar_id": "s1f3", "condition": "neutral"  },
-        { "avatar_id": "s1m3", "condition": "control"  }
+        { "condition": "neutral",  "level": 0 },
+        { "condition": "friendly", "level": 1 },
+        { "condition": "neutral",  "level": 2 },
+        { "condition": "friendly", "level": 0 },
+        { "condition": "neutral",  "level": 1 },
+        { "condition": "friendly", "level": 2 }
       ]
     },
     "3": {
-      "set": 1,
       "blocks": [
-        { "avatar_id": "s1f3", "condition": "neutral"  },
-        { "avatar_id": "s1m3", "condition": "control"  },
-        { "avatar_id": "s1m4", "condition": "neutral"  },
-        { "avatar_id": "s1f4", "condition": "control"  },
-        { "avatar_id": "s1m2", "condition": "friendly" },
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1m1", "condition": "control"  }
+        { "condition": "friendly", "level": 1 },
+        { "condition": "neutral",  "level": 2 },
+        { "condition": "friendly", "level": 0 },
+        { "condition": "neutral",  "level": 1 },
+        { "condition": "friendly", "level": 2 },
+        { "condition": "neutral",  "level": 0 }
       ]
     },
     "4": {
-      "set": 1,
       "blocks": [
-        { "avatar_id": "s1m1", "condition": "control"  },
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1m2", "condition": "friendly" },
-        { "avatar_id": "s1m3", "condition": "control"  },
-        { "avatar_id": "s1f3", "condition": "neutral"  },
-        { "avatar_id": "s1f4", "condition": "control"  },
-        { "avatar_id": "s1m4", "condition": "neutral"  }
+        { "condition": "neutral",  "level": 1 },
+        { "condition": "friendly", "level": 2 },
+        { "condition": "neutral",  "level": 0 },
+        { "condition": "friendly", "level": 1 },
+        { "condition": "neutral",  "level": 2 },
+        { "condition": "friendly", "level": 0 }
       ]
     },
     "5": {
-      "set": 1,
       "blocks": [
-        { "avatar_id": "s1m4", "condition": "neutral"  },
-        { "avatar_id": "s1f4", "condition": "control"  },
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1m1", "condition": "control"  },
-        { "avatar_id": "s1m2", "condition": "friendly" },
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1f3", "condition": "neutral"  },
-        { "avatar_id": "s1m3", "condition": "control"  }
+        { "condition": "friendly", "level": 2 },
+        { "condition": "neutral",  "level": 0 },
+        { "condition": "friendly", "level": 1 },
+        { "condition": "neutral",  "level": 2 },
+        { "condition": "friendly", "level": 0 },
+        { "condition": "neutral",  "level": 1 }
       ]
     },
     "6": {
-      "set": 1,
       "blocks": [
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1m3", "condition": "control"  },
-        { "avatar_id": "s1m4", "condition": "neutral"  },
-        { "avatar_id": "s1m1", "condition": "control"  },
-        { "avatar_id": "s1f3", "condition": "neutral"  },
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1m2", "condition": "friendly" },
-        { "avatar_id": "s1f4", "condition": "control"  }
-      ]
-    },
-    "7": {
-      "set": 1,
-      "blocks": [
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1m2", "condition": "friendly" },
-        { "avatar_id": "s1m1", "condition": "control"  },
-        { "avatar_id": "s1m4", "condition": "neutral"  },
-        { "avatar_id": "s1f4", "condition": "control"  },
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1m3", "condition": "control"  },
-        { "avatar_id": "s1f3", "condition": "neutral"  }
-      ]
-    },
-    "8": {
-      "set": 1,
-      "blocks": [
-        { "avatar_id": "s1m3", "condition": "control"  },
-        { "avatar_id": "s1f3", "condition": "neutral"  },
-        { "avatar_id": "s1f2", "condition": "control"  },
-        { "avatar_id": "s1f1", "condition": "friendly" },
-        { "avatar_id": "s1f4", "condition": "control"  },
-        { "avatar_id": "s1m4", "condition": "neutral"  },
-        { "avatar_id": "s1m1", "condition": "control"  },
-        { "avatar_id": "s1m2", "condition": "friendly" }
-      ]
-    },
-    "9": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2f1", "condition": "control"  },
-        { "avatar_id": "s2f2", "condition": "friendly" },
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2m3", "condition": "neutral"  },
-        { "avatar_id": "s2f3", "condition": "control"  },
-        { "avatar_id": "s2f4", "condition": "neutral"  },
-        { "avatar_id": "s2m4", "condition": "control"  }
-      ]
-    },
-    "10": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2f2", "condition": "friendly" },
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2f4", "condition": "neutral"  },
-        { "avatar_id": "s2m4", "condition": "control"  },
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2f1", "condition": "control"  },
-        { "avatar_id": "s2m3", "condition": "neutral"  },
-        { "avatar_id": "s2f3", "condition": "control"  }
-      ]
-    },
-    "11": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2m3", "condition": "neutral"  },
-        { "avatar_id": "s2f3", "condition": "control"  },
-        { "avatar_id": "s2f4", "condition": "neutral"  },
-        { "avatar_id": "s2m4", "condition": "control"  },
-        { "avatar_id": "s2f2", "condition": "friendly" },
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2f1", "condition": "control"  }
-      ]
-    },
-    "12": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2f1", "condition": "control"  },
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2f2", "condition": "friendly" },
-        { "avatar_id": "s2f3", "condition": "control"  },
-        { "avatar_id": "s2m3", "condition": "neutral"  },
-        { "avatar_id": "s2m4", "condition": "control"  },
-        { "avatar_id": "s2f4", "condition": "neutral"  }
-      ]
-    },
-    "13": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2f4", "condition": "neutral"  },
-        { "avatar_id": "s2m4", "condition": "control"  },
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2f1", "condition": "control"  },
-        { "avatar_id": "s2f2", "condition": "friendly" },
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2m3", "condition": "neutral"  },
-        { "avatar_id": "s2f3", "condition": "control"  }
-      ]
-    },
-    "14": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2f3", "condition": "control"  },
-        { "avatar_id": "s2f4", "condition": "neutral"  },
-        { "avatar_id": "s2f1", "condition": "control"  },
-        { "avatar_id": "s2m3", "condition": "neutral"  },
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2f2", "condition": "friendly" },
-        { "avatar_id": "s2m4", "condition": "control"  }
-      ]
-    },
-    "15": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2f2", "condition": "friendly" },
-        { "avatar_id": "s2f1", "condition": "control"  },
-        { "avatar_id": "s2f4", "condition": "neutral"  },
-        { "avatar_id": "s2m4", "condition": "control"  },
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2f3", "condition": "control"  },
-        { "avatar_id": "s2m3", "condition": "neutral"  }
-      ]
-    },
-    "16": {
-      "set": 2,
-      "blocks": [
-        { "avatar_id": "s2f3", "condition": "control"  },
-        { "avatar_id": "s2m3", "condition": "neutral"  },
-        { "avatar_id": "s2m2", "condition": "control"  },
-        { "avatar_id": "s2m1", "condition": "friendly" },
-        { "avatar_id": "s2m4", "condition": "control"  },
-        { "avatar_id": "s2f4", "condition": "neutral"  },
-        { "avatar_id": "s2f1", "condition": "control"  },
-        { "avatar_id": "s2f2", "condition": "friendly" }
+        { "condition": "neutral",  "level": 2 },
+        { "condition": "friendly", "level": 0 },
+        { "condition": "neutral",  "level": 1 },
+        { "condition": "friendly", "level": 2 },
+        { "condition": "neutral",  "level": 0 },
+        { "condition": "friendly", "level": 1 }
       ]
     }
   }

@@ -3,7 +3,7 @@
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from .models import Base
@@ -21,8 +21,18 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def create_all() -> None:
-    """Create all tables if they don't exist."""
+    """Create all tables if they don't exist, then apply incremental migrations."""
     Base.metadata.create_all(bind=engine)
+    _migrate()
+
+
+def _migrate() -> None:
+    """Add new columns to existing tables that predate them."""
+    with engine.connect() as conn:
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(trials)")).fetchall()}
+        if "level" not in cols:
+            conn.execute(text("ALTER TABLE trials ADD COLUMN level INTEGER"))
+            conn.commit()
 
 
 def get_db():
