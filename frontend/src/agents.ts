@@ -180,8 +180,9 @@ class CHASEAgent implements Agent {
 
     // Win streak with sufficient overall success → increasingly likely noisy
     if (success >= successCriterion && winStreak >= 1) {
+      if (winStreak >= maxWinStreak) return true;  // deterministic; also avoids division by zero
       const chanceLevel = Math.pow(1 / (maxWinStreak + 1 - winStreak), skewness);
-      if (this.rng() < chanceLevel || winStreak >= maxWinStreak) return true;
+      if (this.rng() < chanceLevel) return true;
     }
 
     return false;
