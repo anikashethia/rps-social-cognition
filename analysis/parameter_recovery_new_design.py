@@ -48,7 +48,7 @@ warnings.filterwarnings("ignore")
 N_SIMS_DEFAULT    = 200      # simulations (40 per kappa level × 5 levels)
 N_BLOCKS          = 6
 N_TRIALS_PER_BLOCK = 40
-N_RESTARTS        = 5
+N_RESTARTS        = 1        # ~24s/sim → ~80 min total; increase for better fits at cost of time
 ALL_PARAMS        = ["alpha", "beta", "gamma", "lam", "kappa"]
 
 BUERGI_R = {"alpha": 0.80, "beta": 0.88, "lam": 0.86, "gamma": 0.73, "kappa": 1.00}
