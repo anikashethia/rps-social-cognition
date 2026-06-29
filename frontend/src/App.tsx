@@ -11,21 +11,18 @@ const TRIALS_PER_BLOCK: Record<TestMode, number> = { test: 5, full: 40 };
 export default function App() {
   const [participantId, setParticipantId] = useState("");
   const [testMode, setTestMode] = useState<TestMode>("test");
-  const [configIndex, setConfigIndex] = useState(1);
   const [status, setStatus] = useState<"idle" | "launching" | "running" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [launch, setLaunch] = useState<{ version: Version } | null>(null);
 
-  // Participant registration state
+  // Registration state
   const [registration, setRegistration] = useState<RegistrationOut | null>(null);
   const [registrationChecked, setRegistrationChecked] = useState(false);
   const [friendlyId, setFriendlyId] = useState("");
   const [neutralId, setNeutralId] = useState("");
   const [regSaving, setRegSaving] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
-
-  const configMax = 6;
 
   const jspsychRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
@@ -107,7 +104,6 @@ export default function App() {
       const session = await createSession({
         participant_id: participantId.trim(),
         mode: version,
-        config_index: configIndex,
       });
       setSessionId(session.session_id);
       setLaunch({ version });
@@ -258,23 +254,6 @@ export default function App() {
               Full (40 trials/block)
             </label>
           </div>
-        </div>
-
-        {/* Config index (block order counterbalancing) */}
-        <div className="space-y-1.5">
-          <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Block Order Config (1–{configMax})
-          </label>
-          <input
-            type="number"
-            min={1}
-            max={configMax}
-            value={configIndex}
-            onChange={(e) =>
-              setConfigIndex(Math.max(1, Math.min(configMax, Number(e.target.value))))
-            }
-            className="w-24 rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-          />
         </div>
 
         {/* Error */}

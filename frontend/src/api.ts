@@ -9,7 +9,7 @@ export interface SessionCreateParams {
   participant_id: string;
   session_number?: number;
   mode: "dev" | "behavioral" | "scanner";
-  config_index: number;
+  config_index?: number;  // optional; block order is now generated server-side from session_id
 }
 
 export interface SessionOut {

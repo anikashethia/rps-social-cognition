@@ -1,7 +1,6 @@
 """Session management endpoints."""
 
-import json
-import os
+import random
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,9 +9,37 @@ from sqlalchemy.orm import Session as DBSession
 from ..database import get_db
 from ..models import ParticipantRegistration, Session
 
-_ROTATION_FILE = os.path.join(os.path.dirname(__file__), "../rotations/rotation.json")
-
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+# ── Block order generation ────────────────────────────────────────────────────
+
+
+def generate_block_order(session_id: int) -> list[dict]:
+    """
+    Generate a random 6-block order, seeded from session_id for reproducibility.
+
+    Matches Buergi et al.'s mn_RPS_config.m constraints:
+      - All 6 (condition, level) combinations appear exactly once
+      - First block is not level 2 (participants learn structure before hardest level)
+      - No two consecutive blocks share the same level
+
+    Uses rejection sampling; typically resolves in <5 iterations.
+    """
+    rng = random.Random(session_id)
+    all_blocks = [
+        {"condition": cond, "level": lvl}
+        for cond in ("friendly", "neutral")
+        for lvl in (0, 1, 2)
+    ]
+    while True:
+        blocks = all_blocks.copy()
+        rng.shuffle(blocks)
+        if blocks[0]["level"] >= 2:
+            continue
+        if any(blocks[i]["level"] == blocks[i + 1]["level"] for i in range(5)):
+            continue
+        return blocks
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -22,7 +49,7 @@ class SessionCreate(BaseModel):
     participant_id: str
     session_number: int = 1
     mode: str  # "dev", "behavioral", or "scanner"
-    config_index: int
+    config_index: int = 1  # stored for reference; block order is generated from session_id
 
 
 class SessionOut(BaseModel):
@@ -117,9 +144,11 @@ class SessionRotation(BaseModel):
 @router.get("/{session_id}/rotation", response_model=SessionRotation)
 def get_session_rotation(session_id: int, db: DBSession = Depends(get_db)):
     """
-    Return the resolved block schedule for this session.
-    Combines the config's (condition, level) ordering with the participant's
-    registered friendly/neutral avatar IDs.
+    Return the resolved 6-block schedule for this session.
+
+    Block order is generated randomly from session_id (reproducible, unique per session),
+    matching Buergi et al.'s mn_RPS_config.m constraints. Avatar IDs are resolved from
+    the participant's IOS-based registration.
     """
     session = db.get(Session, session_id)
     if session is None:
@@ -131,18 +160,8 @@ def get_session_rotation(session_id: int, db: DBSession = Depends(get_db)):
             status_code=404,
             detail=(
                 f"Participant '{session.participant_id}' has no avatar registration. "
-                "Register them at POST /api/participants/{id}/registration before starting."
+                "Register them at PUT /api/participants/{id}/registration before starting."
             ),
-        )
-
-    with open(_ROTATION_FILE) as f:
-        rotation_data = json.load(f)
-
-    config = rotation_data.get("configs", {}).get(str(session.config_index))
-    if config is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Config index {session.config_index} not found in rotation table",
         )
 
     avatar_map = {
@@ -156,6 +175,6 @@ def get_session_rotation(session_id: int, db: DBSession = Depends(get_db)):
             condition=b["condition"],
             level=b["level"],
         )
-        for b in config["blocks"]
+        for b in generate_block_order(session_id)
     ]
     return SessionRotation(blocks=blocks)
