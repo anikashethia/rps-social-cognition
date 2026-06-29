@@ -1,10 +1,11 @@
 /**
- * Agent strategy logic for the RPS task.
- * CHASEAgent exactly implements the CHASE model (Buergi et al., Nature Neuroscience 2026):
- * - Dual attraction trackers: own choices + participant's choices (RW-freq delta rule)
- * - Parity-based seeding: even levels seed from bot's own habits, odd from participant's habits
- * - Lambda scales loss payoffs in best-response computation
- * - Beta (softmax inverse temperature) is the only source of decision noise — no epsilon noise
+ * CHASEAgent replicates Buergi et al.'s artificial opponent (mn_RPS_task.m):
+ *   - alpha=0.9, beta=10 (87th/94th percentile of human-human gameplay)
+ *   - Dual attraction trackers: own choices + participant choices (RW-freq delta rule)
+ *   - Level-k generation: level 0 softmax(own attr); levels 1+ use raw attractions as
+ *     input to expected-value computation (no initial softmax on seed), matching their code
+ *   - Adaptive WSLS noise: after participant win/lose/tie streaks, plays non-optimal action
+ *     (mn_RPS_task.m get_noise_level logic; Supplementary Methods section)
  */
 
 // ── Seeded RNG (mulberry32) ──────────────────────────────────────────────────
@@ -40,7 +41,8 @@ const ACTIONS: readonly [1, 2, 3] = [1, 2, 3];
 export interface Agent {
   readonly id: string;
   choose(): number;
-  update(own: number, opp: number): void;
+  /** own = bot's choice, opp = participant's choice, score = +1 win / -1 lose / 0 tie */
+  update(own: number, opp: number, score?: number): void;
   reset(): void;
 }
 
@@ -48,9 +50,9 @@ export interface Agent {
 
 interface CHASEConfig {
   level?: number;
-  alpha?: number;   // attraction learning rate
-  beta?: number;    // softmax inverse temperature (decision noise)
-  lambda?: number;  // loss sensitivity (scales negative payoffs)
+  alpha?: number;
+  beta?: number;
+  lambda?: number;
   seed?: number | null;
 }
 
@@ -62,12 +64,14 @@ class CHASEAgent implements Agent {
   private lambda: number;
   private rng: () => number;
 
-  // Dual attraction trackers (RW-freq delta rule, matching BAKR_2024_CHASE_LR_update.m)
+  // Dual attraction trackers (RW-freq delta rule, BAKR_2024_CHASE_LR_update.m)
   private attr: number[];   // bot's own action frequencies
-  private pAttr: number[];  // participant's action frequencies (as tracked by the bot)
+  private pAttr: number[];  // participant's action frequencies (tracked by bot)
 
-  // Row-player payoff matrix: payoff[myAction][theirAction]
-  // 0=Rock, 1=Paper, 2=Scissors (0-indexed internally)
+  // Participant outcome history for adaptive noise (+1 win, -1 lose, 0 tie from participant's view)
+  private scores: number[];
+
+  // Row-player payoff: payoff[myAction][theirAction], 0=Rock 1=Paper 2=Scissors
   private readonly payoff = [
     [0, -1, 1],
     [1, 0, -1],
@@ -77,12 +81,13 @@ class CHASEAgent implements Agent {
   constructor(id: string, config: CHASEConfig = {}) {
     this.id = id;
     this.level = config.level ?? 1;
-    this.alpha = config.alpha ?? 0.3;
-    this.beta = config.beta ?? 3.0;
+    this.alpha = config.alpha ?? 0.9;  // 87th percentile human-human (Supplementary Methods)
+    this.beta = config.beta ?? 10;     // 94th percentile human-human (Supplementary Methods)
     this.lambda = config.lambda ?? 1.0;
     this.rng = mkRng(config.seed ?? null);
     this.attr = [1 / 3, 1 / 3, 1 / 3];
     this.pAttr = [1 / 3, 1 / 3, 1 / 3];
+    this.scores = [];
   }
 
   private softmax(v: number[]): number[] {
@@ -93,58 +98,125 @@ class CHASEAgent implements Agent {
     return e.map((x) => x / sum);
   }
 
-  /** Best-response distribution against an opponent mixed strategy, with lambda on losses. */
-  private br(op: number[]): number[] {
-    const ev = this.payoff.map((row) =>
-      row.reduce((s, v, j) => s + (v < 0 ? v * this.lambda : v) * op[j]!, 0),
+  /** Expected value of each action against a given opponent distribution. */
+  private ev(dist: number[]): number[] {
+    return this.payoff.map((row) =>
+      row.reduce((s, v, j) => s + (v < 0 ? v * this.lambda : v) * dist[j]!, 0),
     );
-    return this.softmax(ev);
   }
 
   /**
-   * Compute action probabilities using CHASE-style parity-based recursive best-response.
+   * Compute action probabilities, matching mn_RPS_task.m exactly:
    *
-   * Matches Buergi et al.'s two-tracker recursion:
-   *   Even levels (0, 2, ...): seed from bot's own habit (this.attr)
-   *   Odd levels  (1, 3, ...): seed from participant's habit (this.pAttr)
+   *   k=0: softmax(attr, β)
+   *         — plays own habit via softmax, ignores participant
    *
-   * Examples:
-   *   level=0: softmax(attr)                    — plays own habit, ignores participant
-   *   level=1: BR(softmax(pAttr))               — best-responds to participant's habit
-   *   level=2: BR(BR(softmax(attr)))             — 2-step recursion from own habit
+   *   k=1: softmax(π @ pAttr, β)
+   *         — raw participant attractions fed directly into EV (no softmax on pAttr)
+   *         — matches: bot_resp_k(2,:) = softmax_fxn((pi_bot * f_subj)', beta)
+   *
+   *   k=2: softmax(π @ softmax(π @ attr, β), β)
+   *         — bot predicts participant as level-1 (BR to raw attr), then best-responds
+   *         — matches: bot_pred = softmax_fxn((pi_subj*f_bot)',beta);
+   *                    bot_resp_k(3,:) = softmax_fxn((pi_bot*bot_pred')',beta)
    */
   private probs(): number[] {
+    if (this.level === 0) {
+      return this.softmax(this.attr);
+    }
+    // Levels 1+: raw attractions used as distribution seed (no initial softmax on seed)
     const seed = this.level % 2 === 0 ? this.attr : this.pAttr;
-    let p = this.softmax(seed);
-    for (let k = 0; k < this.level; k++) p = this.br(p);
+    let p = this.softmax(this.ev(seed));        // first BR against raw seed
+    for (let k = 1; k < this.level; k++) {
+      p = this.softmax(this.ev(p));             // subsequent BRs (intermediate p is already a distribution)
+    }
     return p;
   }
 
-  choose(): number {
-    return ACTIONS[weightedChoice(this.rng, this.probs())]!;
+  /**
+   * Adaptive WSLS noise, matching mn_RPS_task.m get_noise_level():
+   *
+   * Returns true (→ play non-optimal action) when:
+   *   - Participant lose or tie streak ≥ 3 or 4 (threshold randomised each trial)
+   *   - Participant win rate ≥ 50% over last 5 trials AND win streak ≥ 1,
+   *     with probability 1/(maxStreak+1−streak)^1.3; deterministic at streak 2 (k=0) or 3 (k>0)
+   */
+  private isNoisyTrial(): boolean {
+    if (this.scores.length === 0) return false;
+
+    const timeHorizon = 5;
+    const successCriterion = 0.5;
+    const skewness = 1.3;
+    const maxWinStreak = this.level === 0 ? 2 : 3;         // streak_bounds[2]
+    const streakMax = 3 + Math.floor(this.rng() * 2);       // randi([3 4]): 3 or 4
+
+    // Success rate over last timeHorizon trials
+    const recent = this.scores.slice(-timeHorizon);
+    const success = recent.filter((s) => s > 0).length / recent.length;
+
+    // Consecutive wins at end of history (bounded by maxWinStreak)
+    let winStreak = 0;
+    for (let i = this.scores.length - 1; i >= 0 && winStreak < maxWinStreak; i--) {
+      if (this.scores[i]! > 0) winStreak++;
+      else break;
+    }
+
+    // Consecutive losses at end (bounded by streakMax)
+    let loseStreak = 0;
+    for (let i = this.scores.length - 1; i >= 0 && loseStreak < streakMax; i--) {
+      if (this.scores[i]! < 0) loseStreak++;
+      else break;
+    }
+
+    // Consecutive ties at end (bounded by streakMax)
+    let tieStreak = 0;
+    for (let i = this.scores.length - 1; i >= 0 && tieStreak < streakMax; i--) {
+      if (this.scores[i]! === 0) tieStreak++;
+      else break;
+    }
+
+    // Lose or tie streak → deterministically noisy
+    if (loseStreak >= streakMax || tieStreak >= streakMax) return true;
+
+    // Win streak with sufficient overall success → increasingly likely noisy
+    if (success >= successCriterion && winStreak >= 1) {
+      const chanceLevel = Math.pow(1 / (maxWinStreak + 1 - winStreak), skewness);
+      if (this.rng() < chanceLevel || winStreak >= maxWinStreak) return true;
+    }
+
+    return false;
   }
 
-  /**
-   * Delta-rule update for both attraction trackers.
-   * own  = bot's own choice (updates this.attr)
-   * opp  = participant's choice (updates this.pAttr)
-   * Matches BAKR_2024_CHASE_LR_update.m RW-freq rule.
-   */
-  update(own: number, opp: number): void {
+  choose(): number {
+    let p = this.probs();
+
+    if (this.isNoisyTrial()) {
+      // Exclude the model-conform action (highest probability), sample from remaining two
+      const maxIdx = p.indexOf(Math.max(...p));
+      p = p.map((v, i) => (i === maxIdx ? 0 : v));
+      const sum = p.reduce((a, b) => a + b, 0);
+      p = p.map((v) => v / sum);
+    }
+
+    return ACTIONS[weightedChoice(this.rng, p)]!;
+  }
+
+  update(own: number, opp: number, score?: number): void {
     const ownIdx = ACTIONS.indexOf(own as 1 | 2 | 3);
     this.attr = this.attr.map(
       (a, i) => a + this.alpha * ((i === ownIdx ? 1 : 0) - a),
     );
-
     const oppIdx = ACTIONS.indexOf(opp as 1 | 2 | 3);
     this.pAttr = this.pAttr.map(
       (a, i) => a + this.alpha * ((i === oppIdx ? 1 : 0) - a),
     );
+    if (score !== undefined) this.scores.push(score);
   }
 
   reset(): void {
     this.attr = [1 / 3, 1 / 3, 1 / 3];
     this.pAttr = [1 / 3, 1 / 3, 1 / 3];
+    this.scores = [];
   }
 }
 

@@ -263,10 +263,10 @@ export async function buildTimeline(
           const pChoice: number | null = data.participant_choice ?? null;
           const aChoice = currentAgent!.choose();
 
-          if (pChoice !== null) currentAgent!.update(aChoice, pChoice);
-
           const out = pChoice !== null ? computeOutcome(pChoice, aChoice) : "timeout";
           const delta = pChoice !== null ? pointsDelta(out) : 0;
+
+          if (pChoice !== null) currentAgent!.update(aChoice, pChoice, Math.sign(delta));
           points += delta;
           trialGlobal++;
 
