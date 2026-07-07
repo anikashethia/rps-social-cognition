@@ -8,25 +8,10 @@
 import HtmlKeyboardResponsePlugin from "@jspsych/plugin-html-keyboard-response";
 import { getSessionRotation, postTrial, postTrigger, setAnchor, type BlockConfig, type TrialData } from "./api";
 import { buildAgent, type Agent } from "./agents";
+import { POINTS, TIMINGS, type Mode } from "./config";
 import FixationPlugin from "./plugins/Fixation";
 import RpsChoicePlugin from "./plugins/RpsChoice";
 import FeedbackPlugin from "./plugins/Feedback";
-
-// ── Mode timings ─────────────────────────────────────────────────────────────
-
-type Mode = "dev" | "behavioral" | "scanner";
-
-const TIMINGS: Record<Mode, {
-  trials: number;
-  iti_min: number;
-  iti_max: number;
-  response_window: number;
-  feedback: number;
-}> = {
-  dev:        { trials: 5,  iti_min: 0, iti_max: 1000, response_window: 4000, feedback: 2000 },
-  behavioral: { trials: 40, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
-  scanner:    { trials: 40, iti_min: 0, iti_max: 6000, response_window: 4000, feedback: 2000 },
-};
 
 // ── Game logic ───────────────────────────────────────────────────────────────
 
@@ -37,9 +22,9 @@ function computeOutcome(pChoice: number, aChoice: number): string {
 }
 
 function pointsDelta(outcome: string): number {
-  if (outcome === "win") return 3;
-  if (outcome === "lose") return -3;
-  return 0;
+  if (outcome === "win") return POINTS.WIN;
+  if (outcome === "lose") return POINTS.LOSS;
+  return POINTS.TIE;
 }
 
 // ── HUD ──────────────────────────────────────────────────────────────────────
@@ -151,7 +136,7 @@ export async function buildTimeline(
   // ── Mutable session state ──────────────────────────────────────────────
 
   let sessionAnchorMs = 0;
-  let points = 100;
+  let points = POINTS.START;
   let trialGlobal = 0;
   let trNumber = 0;
   let currentAgent: Agent | null = null;
@@ -218,6 +203,22 @@ export async function buildTimeline(
     });
   }
 
+  // ── Build one agent per avatar, keyed by avatar_id ────────────────────
+  // Agents persist across all their blocks so attraction histories accumulate
+  // continuously, matching Buergi et al.'s mn_RPS_task.m (env.f_mat_bot/subj
+  // are never reset between blocks). setLevel() updates the reasoning level
+  // before each block without touching any other state.
+
+  const agentMap = new Map<string, Agent>();
+  blocks.forEach((block) => {
+    if (!agentMap.has(block.avatar_id)) {
+      agentMap.set(
+        block.avatar_id,
+        buildAgent(block.avatar_id, block.level, sessionId * 1000 + agentMap.size),
+      );
+    }
+  });
+
   // ── Blocks ─────────────────────────────────────────────────────────────
 
   for (let b = 0; b < totalBlocks; b++) {
@@ -229,7 +230,8 @@ export async function buildTimeline(
       stimulus: () => blockIntroHTML(block, blockNum, totalBlocks),
       choices: "ALL_KEYS",
       on_start: () => {
-        currentAgent = buildAgent(block.avatar_id, block.level, sessionId * 1000 + b);
+        currentAgent = agentMap.get(block.avatar_id)!;
+        currentAgent.setLevel(block.level);
         updateHUD(blockNum, totalBlocks, points);
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
