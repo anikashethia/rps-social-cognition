@@ -264,9 +264,12 @@ export async function buildTimeline(
         on_finish: (data: any) => {
           const pChoice: number | null = data.participant_choice ?? null;
           const aChoice = currentAgent!.choose();
-          const isNoisy    = currentAgent!.getLastNoisy();
-          const botAttr    = currentAgent!.getLastBotAttr();
-          const pAttrSnap  = currentAgent!.getLastPAttr();
+          const isNoisy            = currentAgent!.getLastNoisy();
+          const noiseTrigger       = currentAgent!.getLastNoiseTrigger();
+          const successRate        = currentAgent!.getLastSuccessRate();
+          const noiseBreakerFired  = currentAgent!.getLastNoiseBreakerFired();
+          const botAttr       = currentAgent!.getLastBotAttr();
+          const pAttrSnap     = currentAgent!.getLastPAttr();
 
           const out = pChoice !== null ? computeOutcome(pChoice, aChoice) : "timeout";
           const delta = pChoice !== null ? pointsDelta(out) : 0;
@@ -292,7 +295,10 @@ export async function buildTimeline(
             block_onset_ms: currentBlockOnsetMs,
             condition: block.condition,
             level: block.level,
-            is_noisy:  isNoisy,
+            is_noisy:           isNoisy,
+            noise_trigger:      noiseTrigger,
+            success_rate:       successRate,
+            noise_breaker:      noiseBreakerFired,
             bot_attr_r: botAttr[0],
             bot_attr_p: botAttr[1],
             bot_attr_s: botAttr[2],

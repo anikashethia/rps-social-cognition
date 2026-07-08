@@ -31,6 +31,9 @@ class TrialCreate(BaseModel):
     condition: str  # "friendly" or "neutral"
     level: int | None = None  # CHASE level (0, 1, or 2)
     is_noisy: bool | None = None
+    noise_trigger: str | None = None
+    success_rate: float | None = None
+    noise_breaker: bool | None = None
     bot_attr_r: float | None = None
     bot_attr_p: float | None = None
     bot_attr_s: float | None = None
@@ -59,6 +62,9 @@ class TrialOut(BaseModel):
     condition: str
     level: int | None
     is_noisy: bool | None
+    noise_trigger: str | None
+    success_rate: float | None
+    noise_breaker: bool | None
     bot_attr_r: float | None
     bot_attr_p: float | None
     bot_attr_s: float | None

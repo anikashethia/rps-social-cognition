@@ -43,6 +43,9 @@ export interface TrialData {
   condition: string;
   level: number | null;
   is_noisy: boolean;
+  noise_trigger: string | null;
+  success_rate: number | null;
+  noise_breaker: boolean;
   bot_attr_r: number;
   bot_attr_p: number;
   bot_attr_s: number;

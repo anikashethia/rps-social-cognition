@@ -63,7 +63,10 @@ class Trial(Base):
     level = Column(Integer, nullable=True)  # CHASE level (0, 1, or 2)
 
     # Noise and attraction logging (mn_RPS_task.m §noise + §attraction history)
-    is_noisy  = Column(Boolean, nullable=True)   # was this a WSLS noisy trial?
+    is_noisy      = Column(Boolean, nullable=True)   # was this a WSLS noisy trial?
+    noise_trigger = Column(String,  nullable=True)   # "lose" | "tie" | "win" | null
+    success_rate  = Column(Float,   nullable=True)   # participant win rate over last N trials at noise decision
+    noise_breaker = Column(Boolean, nullable=True)   # did noise_breaker suppress a repeated noisy action?
     bot_attr_r = Column(Float, nullable=True)    # bot's own attraction for Rock  (pre-choice)
     bot_attr_p = Column(Float, nullable=True)    # bot's own attraction for Paper (pre-choice)
     bot_attr_s = Column(Float, nullable=True)    # bot's own attraction for Scissors (pre-choice)

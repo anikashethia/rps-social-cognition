@@ -45,6 +45,12 @@ export interface Agent {
   reset(): void;
   /** Whether the most recent choose() was a noisy trial. */
   getLastNoisy(): boolean;
+  /** Which streak condition triggered noise ("lose" | "tie" | "win"), or null if non-noisy. */
+  getLastNoiseTrigger(): "lose" | "tie" | "win" | null;
+  /** Participant win rate over the last N trials at the time of the noise decision (null on trial 1). */
+  getLastSuccessRate(): number | null;
+  /** Whether the noise_breaker additionally suppressed a repeated noisy action (mn_RPS_task.m line 116). */
+  getLastNoiseBreakerFired(): boolean;
   /** Bot's own attraction vector [R,P,S] snapshotted before the most recent choose(). */
   getLastBotAttr(): [number, number, number];
   /** Participant's attraction vector [R,P,S] snapshotted before the most recent choose(). */
@@ -82,6 +88,9 @@ class CHASEAgent implements Agent {
 
   // Snapshots from the most recent choose() call — read by timeline.ts for DB logging
   private _lastNoisy = false;
+  private _lastNoiseTrigger: "lose" | "tie" | "win" | null = null;
+  private _lastSuccessRate: number | null = null;
+  private _lastNoiseBreakerFired = false;
   private _lastBotAttr: [number, number, number] = [1 / 3, 1 / 3, 1 / 3];
   private _lastPAttr: [number, number, number] = [1 / 3, 1 / 3, 1 / 3];
 
@@ -99,8 +108,9 @@ class CHASEAgent implements Agent {
     this.beta  = config.beta  ?? BOT.BETA;
     this.lambda = config.lambda ?? BOT.LAMBDA;
     this.rng = mkRng(config.seed ?? null);
-    this.attr = [1 / 3, 1 / 3, 1 / 3];
-    this.pAttr = [1 / 3, 1 / 3, 1 / 3];
+    const u = 1 / GAME.STRAT_SPACE;
+    this.attr = Array<number>(GAME.STRAT_SPACE).fill(u);
+    this.pAttr = Array<number>(GAME.STRAT_SPACE).fill(u);
     this.scores = [];
     this.botChoices = [];
     this.noisyHistory = [];
@@ -146,11 +156,18 @@ class CHASEAgent implements Agent {
 
   /**
    * Matches get_noise_level() in mn_RPS_task.m.
-   * Returns { beta, isNoisy }: beta is 10 (normal) or 1e-3 (noisy trial).
+   * Returns beta (10 normal / 1e-3 noisy), isNoisy, the streak trigger, and success rate.
    * Always consumes 1 RNG call (streakMax draw); may consume a 2nd (chance check).
    */
-  private getNoisyLevel(): { beta: number; isNoisy: boolean } {
-    if (this.scores.length === 0) return { beta: this.beta, isNoisy: false };
+  private getNoisyLevel(): {
+    beta: number;
+    isNoisy: boolean;
+    noiseTrigger: "lose" | "tie" | "win" | null;
+    successRate: number | null;
+  } {
+    if (this.scores.length === 0) {
+      return { beta: this.beta, isNoisy: false, noiseTrigger: null, successRate: null };
+    }
 
     const timeHorizon = NOISE.TIME_HORIZON;
     const successCriterion = NOISE.SUCCESS_CRITERION;
@@ -181,22 +198,32 @@ class CHASEAgent implements Agent {
 
     // Success rate over last timeHorizon trials
     const recent = this.scores.slice(-timeHorizon);
-    const success = recent.filter((s) => s > 0).length / recent.length;
+    const successRate = recent.filter((s) => s > 0).length / recent.length;
 
-    if (loseStreak >= streakMax || tieStreak >= streakMax) {
-      return { beta: NOISE.BETA, isNoisy: true };
+    if (loseStreak >= streakMax) {
+      return { beta: NOISE.BETA, isNoisy: true, noiseTrigger: "lose", successRate };
+    }
+    if (tieStreak >= streakMax) {
+      return { beta: NOISE.BETA, isNoisy: true, noiseTrigger: "tie", successRate };
     }
 
-    if (success >= successCriterion && winStreak >= 1) {
-      if (winStreak >= maxWinStreak) return { beta: NOISE.BETA, isNoisy: true };
+    if (successRate >= successCriterion && winStreak >= 1) {
+      if (winStreak >= maxWinStreak) {
+        return { beta: NOISE.BETA, isNoisy: true, noiseTrigger: "win", successRate };
+      }
       const chanceLevel = Math.pow(1 / (maxWinStreak + 1 - winStreak), skewness);
-      if (this.rng() < chanceLevel) return { beta: NOISE.BETA, isNoisy: true };
+      if (this.rng() < chanceLevel) {
+        return { beta: NOISE.BETA, isNoisy: true, noiseTrigger: "win", successRate };
+      }
     }
 
-    return { beta: this.beta, isNoisy: false };
+    return { beta: this.beta, isNoisy: false, noiseTrigger: null, successRate };
   }
 
   getLastNoisy(): boolean { return this._lastNoisy; }
+  getLastNoiseTrigger(): "lose" | "tie" | "win" | null { return this._lastNoiseTrigger; }
+  getLastSuccessRate(): number | null { return this._lastSuccessRate; }
+  getLastNoiseBreakerFired(): boolean { return this._lastNoiseBreakerFired; }
   getLastBotAttr(): [number, number, number] { return this._lastBotAttr; }
   getLastPAttr(): [number, number, number] { return this._lastPAttr; }
 
@@ -212,8 +239,11 @@ class CHASEAgent implements Agent {
     this._lastBotAttr = [...this.attr] as [number, number, number];
     this._lastPAttr   = [...this.pAttr] as [number, number, number];
 
-    const { beta, isNoisy } = this.getNoisyLevel();
-    this._lastNoisy = isNoisy;
+    const { beta, isNoisy, noiseTrigger, successRate } = this.getNoisyLevel();
+    this._lastNoisy             = isNoisy;
+    this._lastNoiseTrigger      = noiseTrigger;
+    this._lastSuccessRate       = successRate;
+    this._lastNoiseBreakerFired = false; // reset; set to true below if it fires
 
     // Compute action probs with the trial's beta (1e-3 when noisy → near-uniform)
     let p = this.probs(beta);
@@ -245,6 +275,7 @@ class CHASEAgent implements Agent {
           p[lastIdx] = 0;
           const s = p.reduce((a, b) => a + b, 0);
           if (s > 0) p = p.map((v) => v / s);
+          this._lastNoiseBreakerFired = true;
         }
       }
     }
@@ -268,8 +299,9 @@ class CHASEAgent implements Agent {
   }
 
   reset(): void {
-    this.attr = [1 / 3, 1 / 3, 1 / 3];
-    this.pAttr = [1 / 3, 1 / 3, 1 / 3];
+    const u = 1 / GAME.STRAT_SPACE;
+    this.attr = Array<number>(GAME.STRAT_SPACE).fill(u);
+    this.pAttr = Array<number>(GAME.STRAT_SPACE).fill(u);
     this.scores = [];
     this.botChoices = [];
     this.noisyHistory = [];
