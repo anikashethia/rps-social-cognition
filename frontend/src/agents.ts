@@ -43,6 +43,12 @@ export interface Agent {
   /** own = bot's choice, opp = participant's choice, score = +1 win / -1 lose / 0 tie */
   update(own: number, opp: number, score?: number): void;
   reset(): void;
+  /** Whether the most recent choose() was a noisy trial. */
+  getLastNoisy(): boolean;
+  /** Bot's own attraction vector [R,P,S] snapshotted before the most recent choose(). */
+  getLastBotAttr(): [number, number, number];
+  /** Participant's attraction vector [R,P,S] snapshotted before the most recent choose(). */
+  getLastPAttr(): [number, number, number];
 }
 
 // ── CHASEAgent ───────────────────────────────────────────────────────────────
@@ -73,6 +79,11 @@ class CHASEAgent implements Agent {
   // Per-trial history for noise_breaker (mn_RPS_task.m lines ~100-115)
   private botChoices: number[];    // bot's own past choices
   private noisyHistory: boolean[]; // whether each past trial was a noisy trial
+
+  // Snapshots from the most recent choose() call — read by timeline.ts for DB logging
+  private _lastNoisy = false;
+  private _lastBotAttr: [number, number, number] = [1 / 3, 1 / 3, 1 / 3];
+  private _lastPAttr: [number, number, number] = [1 / 3, 1 / 3, 1 / 3];
 
   // Row-player payoff matrix (myAction × theirAction), R/P/S indexed 0–2
   private readonly payoff = [
@@ -185,8 +196,24 @@ class CHASEAgent implements Agent {
     return { beta: this.beta, isNoisy: false };
   }
 
+  getLastNoisy(): boolean { return this._lastNoisy; }
+  getLastBotAttr(): [number, number, number] { return this._lastBotAttr; }
+  getLastPAttr(): [number, number, number] { return this._lastPAttr; }
+
   choose(): number {
+    // Assert no NaN in either attraction tracker (mn_RPS_task.m assertion)
+    if (this.attr.some(isNaN) || this.pAttr.some(isNaN)) {
+      throw new Error(
+        `CHASEAgent ${this.id}: NaN in attractions — attr=[${this.attr}] pAttr=[${this.pAttr}]`,
+      );
+    }
+
+    // Snapshot pre-choice attractions for DB logging
+    this._lastBotAttr = [...this.attr] as [number, number, number];
+    this._lastPAttr   = [...this.pAttr] as [number, number, number];
+
     const { beta, isNoisy } = this.getNoisyLevel();
+    this._lastNoisy = isNoisy;
 
     // Compute action probs with the trial's beta (1e-3 when noisy → near-uniform)
     let p = this.probs(beta);

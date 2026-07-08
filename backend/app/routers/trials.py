@@ -30,6 +30,13 @@ class TrialCreate(BaseModel):
     block_onset_ms: float
     condition: str  # "friendly" or "neutral"
     level: int | None = None  # CHASE level (0, 1, or 2)
+    is_noisy: bool | None = None
+    bot_attr_r: float | None = None
+    bot_attr_p: float | None = None
+    bot_attr_s: float | None = None
+    p_attr_r: float | None = None
+    p_attr_p: float | None = None
+    p_attr_s: float | None = None
 
 
 class TrialOut(BaseModel):
@@ -51,6 +58,13 @@ class TrialOut(BaseModel):
     block_onset_ms: float
     condition: str
     level: int | None
+    is_noisy: bool | None
+    bot_attr_r: float | None
+    bot_attr_p: float | None
+    bot_attr_s: float | None
+    p_attr_r: float | None
+    p_attr_p: float | None
+    p_attr_s: float | None
 
     model_config = {"from_attributes": True}
 

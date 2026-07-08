@@ -40,15 +40,17 @@ from scipy.stats import pearsonr
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.chase import CHASEModel
+from config import (N_BLOCKS, N_TRIALS as N_TRIALS_PER_BLOCK,
+                    BOT_ALPHA, BOT_BETA, BOT_LAMBDA,
+                    NOISE_TIME_HORIZON, NOISE_SUCCESS_CRIT, NOISE_SKEWNESS)
 
 warnings.filterwarnings("ignore")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-N_SIMS_DEFAULT    = 200      # simulations (40 per kappa level × 5 levels)
-N_BLOCKS          = 6
-N_TRIALS_PER_BLOCK = 40
-N_RESTARTS        = 1        # ~24s/sim → ~80 min total; increase for better fits at cost of time
+N_SIMS_DEFAULT = 200  # simulations (40 per kappa level × 5 levels)
+N_RESTARTS     = 1   # ~24s/sim → ~80 min total; increase for better fits at cost of time
+# N_BLOCKS and N_TRIALS_PER_BLOCK imported from config
 ALL_PARAMS        = ["alpha", "beta", "gamma", "lam", "kappa"]
 
 BUERGI_R = {"alpha": 0.80, "beta": 0.88, "lam": 0.86, "gamma": 0.73, "kappa": 1.00}
@@ -61,8 +63,8 @@ class CHASEBot:
 
     PAYOFF = np.array([[0, -1, 1], [1, 0, -1], [-1, 1, 0]], dtype=float)
 
-    def __init__(self, level: int, alpha: float = 0.9, beta: float = 10.0,
-                 lam: float = 1.0, seed=None):
+    def __init__(self, level: int, alpha: float = BOT_ALPHA, beta: float = BOT_BETA,
+                 lam: float = BOT_LAMBDA, seed=None):
         self.level  = level
         self.alpha  = alpha
         self.beta   = beta
@@ -93,9 +95,9 @@ class CHASEBot:
     def _is_noisy(self):
         if not self.scores:
             return False
-        time_horizon   = 5
-        success_crit   = 0.5
-        skewness       = 1.3
+        time_horizon   = NOISE_TIME_HORIZON
+        success_crit   = NOISE_SUCCESS_CRIT
+        skewness       = NOISE_SKEWNESS
         max_win_streak = 2 if self.level == 0 else 3
         streak_max     = int(self.rng.integers(3, 5))
 
@@ -359,8 +361,8 @@ def analyse_and_plot(df: pd.DataFrame, output_dir: str):
         return pearsonr(x[mask], y[mask])[0], int(mask.sum())
 
     lims = {
-        "alpha": (0, 1), "beta": (0, 15), "gamma": (0, 10),
-        "lam": (0, 3.5), "kappa": (-0.5, 4.5),
+        "alpha": (0, 1), "beta": (0, 100), "gamma": (0, 20),
+        "lam": (0, 100), "kappa": (-0.5, 4.5),
     }
 
     fig, axes = plt.subplots(1, 5, figsize=(20, 4))

@@ -42,6 +42,13 @@ export interface TrialData {
   block_onset_ms: number;
   condition: string;
   level: number | null;
+  is_noisy: boolean;
+  bot_attr_r: number;
+  bot_attr_p: number;
+  bot_attr_s: number;
+  p_attr_r: number;
+  p_attr_p: number;
+  p_attr_s: number;
 }
 
 export interface BlockConfig {

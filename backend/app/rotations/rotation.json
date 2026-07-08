@@ -52,21 +52,21 @@
     },
     "5": {
       "blocks": [
-        { "condition": "friendly", "level": 2 },
-        { "condition": "neutral",  "level": 0 },
-        { "condition": "friendly", "level": 1 },
-        { "condition": "neutral",  "level": 2 },
         { "condition": "friendly", "level": 0 },
+        { "condition": "neutral",  "level": 2 },
+        { "condition": "friendly", "level": 1 },
+        { "condition": "neutral",  "level": 0 },
+        { "condition": "friendly", "level": 2 },
         { "condition": "neutral",  "level": 1 }
       ]
     },
     "6": {
       "blocks": [
-        { "condition": "neutral",  "level": 2 },
-        { "condition": "friendly", "level": 0 },
-        { "condition": "neutral",  "level": 1 },
-        { "condition": "friendly", "level": 2 },
         { "condition": "neutral",  "level": 0 },
+        { "condition": "friendly", "level": 2 },
+        { "condition": "neutral",  "level": 1 },
+        { "condition": "friendly", "level": 0 },
+        { "condition": "neutral",  "level": 2 },
         { "condition": "friendly", "level": 1 }
       ]
     }

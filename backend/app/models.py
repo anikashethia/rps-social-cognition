@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -61,6 +61,15 @@ class Trial(Base):
     block_onset_ms = Column(Float, nullable=False)
     condition = Column(String, nullable=False)  # "friendly" or "neutral"
     level = Column(Integer, nullable=True)  # CHASE level (0, 1, or 2)
+
+    # Noise and attraction logging (mn_RPS_task.m §noise + §attraction history)
+    is_noisy  = Column(Boolean, nullable=True)   # was this a WSLS noisy trial?
+    bot_attr_r = Column(Float, nullable=True)    # bot's own attraction for Rock  (pre-choice)
+    bot_attr_p = Column(Float, nullable=True)    # bot's own attraction for Paper (pre-choice)
+    bot_attr_s = Column(Float, nullable=True)    # bot's own attraction for Scissors (pre-choice)
+    p_attr_r   = Column(Float, nullable=True)    # participant's attraction for Rock  (bot's estimate, pre-choice)
+    p_attr_p   = Column(Float, nullable=True)    # participant's attraction for Paper (bot's estimate, pre-choice)
+    p_attr_s   = Column(Float, nullable=True)    # participant's attraction for Scissors (bot's estimate, pre-choice)
 
     session = relationship("Session", back_populates="trials")
 

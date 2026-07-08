@@ -78,7 +78,7 @@ function rulesHTML(): string {
         🪨 Rock beats Scissors &nbsp;·&nbsp; ✂️ Scissors beats Paper &nbsp;·&nbsp; 📄 Paper beats Rock
       </div>
       <div class="subtitle-dark" style="font-size:16px;">
-        Use keys 1, 2, 3 to choose. Win +3 &nbsp;·&nbsp; Lose &minus;3 &nbsp;·&nbsp; Draw 0
+        Use keys 1, 2, 3 to choose. Win +1 &nbsp;·&nbsp; Lose &minus;1 &nbsp;·&nbsp; Draw 0
       </div>
       <div class="btn-dark-pill">'Press a key' to Begin</div>
     </div>`;
@@ -264,6 +264,9 @@ export async function buildTimeline(
         on_finish: (data: any) => {
           const pChoice: number | null = data.participant_choice ?? null;
           const aChoice = currentAgent!.choose();
+          const isNoisy    = currentAgent!.getLastNoisy();
+          const botAttr    = currentAgent!.getLastBotAttr();
+          const pAttrSnap  = currentAgent!.getLastPAttr();
 
           const out = pChoice !== null ? computeOutcome(pChoice, aChoice) : "timeout";
           const delta = pChoice !== null ? pointsDelta(out) : 0;
@@ -289,6 +292,13 @@ export async function buildTimeline(
             block_onset_ms: currentBlockOnsetMs,
             condition: block.condition,
             level: block.level,
+            is_noisy:  isNoisy,
+            bot_attr_r: botAttr[0],
+            bot_attr_p: botAttr[1],
+            bot_attr_s: botAttr[2],
+            p_attr_r:  pAttrSnap[0],
+            p_attr_p:  pAttrSnap[1],
+            p_attr_s:  pAttrSnap[2],
           };
 
           updateHUD(blockNum, totalBlocks, points);

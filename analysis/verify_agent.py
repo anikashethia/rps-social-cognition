@@ -26,6 +26,9 @@ Run from repo root:
 
 import numpy as np
 import matplotlib.pyplot as plt
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import (BOT_ALPHA, BOT_BETA, BOT_LAMBDA, N_ACTIONS,
+                    NOISE_TIME_HORIZON, NOISE_SUCCESS_CRIT, NOISE_SKEWNESS)
 
 
 # ── Python mirror of TypeScript CHASEAgent (agents.ts) ───────────────────────
@@ -36,8 +39,8 @@ class CHASEBot:
 
     PAYOFF = np.array([[0, -1, 1], [1, 0, -1], [-1, 1, 0]], dtype=float)
 
-    def __init__(self, level: int, alpha: float = 0.9, beta: float = 10.0,
-                 lam: float = 1.0, seed=None):
+    def __init__(self, level: int, alpha: float = BOT_ALPHA, beta: float = BOT_BETA,
+                 lam: float = BOT_LAMBDA, seed=None):
         self.level = level
         self.alpha = alpha
         self.beta = beta
@@ -80,9 +83,9 @@ class CHASEBot:
         if not self.scores:
             return False
 
-        time_horizon   = 5
-        success_crit   = 0.5
-        skewness       = 1.3
+        time_horizon   = NOISE_TIME_HORIZON
+        success_crit   = NOISE_SUCCESS_CRIT
+        skewness       = NOISE_SKEWNESS
         max_win_streak = 2 if self.level == 0 else 3   # streak_bounds[2]
         streak_max     = int(self.rng.integers(3, 5))  # randi([3 4])
 
@@ -444,7 +447,7 @@ def make_figure(paper_over_time: dict, noise_results: dict, save_path: str):
 
 if __name__ == "__main__":
     print("CHASEAgent verification")
-    print(f"Parameters: alpha=0.9, beta=10 (matching Buergi et al. mn_RPS_config.m)")
+    print(f"Parameters: alpha={BOT_ALPHA}, beta={BOT_BETA} (matching Buergi et al. mn_RPS_config.m)")
 
     paper_over_time, final_dists, checks1 = check_level_differentiation()
     noise_results,              checks2   = check_wsls_noise()

@@ -21,6 +21,7 @@ Usage:
     bu_timeseries = result.belief_updates
 """
 
+import itertools
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import softmax as scipy_softmax
@@ -28,24 +29,41 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 import warnings
 
+from config import N_ACTIONS, PARAM_BOUNDS, PARAM_INIT
 
-# ── Parameter bounds ──────────────────────────────────────────────────────────
+# ── Grid search values (BAKR_2024_CHASE_config.m, n_samples = 5) ─────────────
+# Stage 1 of fitting: evaluate LL at every Cartesian combination (5^4 = 625
+# points per kappa), then optimise from the top-N.
 
-PARAM_BOUNDS = {
-    "alpha":  (1e-4, 1.0 - 1e-4),   # Learning rate
-    "beta":   (0.01, 20.0),          # Softmax inverse temperature
-    "gamma":  (0.01, 20.0),          # Sensitivity to opponent-level evidence
-    "lam":    (0.1,  5.0),           # Loss sensitivity (lambda; renamed to avoid builtin)
-    "kappa":  (0,    4),             # Max sophistication level (integer, fitted via discrete sweep). kappa=0 is the egocentric/non-strategic case.
+_N_GRID = 5
+GRID_VALUES = {
+    "beta":  np.linspace(0.1,  5.0,  _N_GRID),   # [0.10, 1.33, 2.55, 3.78, 5.00]
+    "lam":   np.linspace(1e-4, 2.0,  _N_GRID),   # [0.00, 0.50, 1.00, 1.50, 2.00]
+    "gamma": np.linspace(1e-4, 2.0,  _N_GRID),   # same
+    "alpha": np.linspace(1e-3, 0.99, _N_GRID),   # [0.00, 0.25, 0.50, 0.74, 0.99]
 }
 
-PARAM_INIT = {
-    "alpha": 0.3,
-    "beta":  3.0,
-    "gamma": 2.0,
-    "lam":   1.0,
-    "kappa": 3,    # Fitted over {1,2,3,4}
-}
+# ── Parameter-space transforms for unconstrained optimisation ─────────────────
+# Matches Buergi's estimation-space transforms in mn_fitModel.m:
+#   alpha ∈ (0,1)   → logit  (inverse: sigmoid)
+#   beta, gamma, lam ∈ (0,∞) → log (inverse: exp)
+# Optimising in this space lets the solver move freely without hitting bounds.
+
+def _to_est(alpha: float, beta: float, gamma: float, lam: float) -> np.ndarray:
+    return np.array([
+        np.log(alpha / (1.0 - alpha)),   # logit
+        np.log(beta),
+        np.log(gamma),
+        np.log(lam),
+    ])
+
+def _from_est(x: np.ndarray) -> dict:
+    return {
+        "alpha": float(1.0 / (1.0 + np.exp(-x[0]))),          # sigmoid
+        "beta":  float(np.clip(np.exp(x[1]), 0, PARAM_BOUNDS["beta"][1])),
+        "gamma": float(np.clip(np.exp(x[2]), 0, PARAM_BOUNDS["gamma"][1])),
+        "lam":   float(np.clip(np.exp(x[3]), 0, PARAM_BOUNDS["lam"][1])),
+    }
 
 # ── Data container ────────────────────────────────────────────────────────────
 
@@ -65,12 +83,16 @@ class CHASEResult:
     converged:      bool  = False
 
     # Trial-by-trial outputs (length = n_trials)
-    beliefs:       np.ndarray = field(default_factory=lambda: np.array([]))  # shape (T, kappa)
-    belief_updates: np.ndarray = field(default_factory=lambda: np.array([]))  # KL divergence, shape (T,)
-    action_probs:   np.ndarray = field(default_factory=lambda: np.array([]))  # P(a|participant), shape (T, 3)
-    choice_values:  np.ndarray = field(default_factory=lambda: np.array([]))  # CV, shape (T,)
-    ape:            np.ndarray = field(default_factory=lambda: np.array([]))  # APE, shape (T,)
-    inferred_level: np.ndarray = field(default_factory=lambda: np.array([]))  # argmax belief, shape (T,)
+    beliefs:            np.ndarray = field(default_factory=lambda: np.array([]))  # shape (T, kappa)
+    belief_updates:     np.ndarray = field(default_factory=lambda: np.array([]))  # KL divergence, shape (T,)
+    action_probs:       np.ndarray = field(default_factory=lambda: np.array([]))  # P(a|participant), shape (T, 3)
+    choice_values:      np.ndarray = field(default_factory=lambda: np.array([]))  # CV, shape (T,)
+    ape:                np.ndarray = field(default_factory=lambda: np.array([]))  # APE, shape (T,)
+    inferred_level:     np.ndarray = field(default_factory=lambda: np.array([]))  # argmax belief, shape (T,)
+    # Full attraction histories — shape (T, 3), row t = attractions used for trial t's choice.
+    # Matches Buergi's f_mat_own / f_mat_other (BAKR_2024_CHASE_LR_init.m RW-freq convention).
+    own_attractions:    np.ndarray = field(default_factory=lambda: np.array([]))  # participant habit tracker
+    opp_attractions:    np.ndarray = field(default_factory=lambda: np.array([]))  # opponent habit tracker
 
 
 # ── Core model ────────────────────────────────────────────────────────────────
@@ -86,7 +108,7 @@ class CHASEModel:
     Rock(0) beats Scissors(2): Π[0,2]=+1; Paper(1) beats Rock(0): Π[1,0]=+1; etc.
     """
 
-    N_ACTIONS = 3
+    N_ACTIONS = N_ACTIONS  # from config
     N_PARAMS  = 5  # alpha, beta, gamma, lam, kappa
 
     # Internal 0-indexed payoff matrix
@@ -202,11 +224,13 @@ class CHASEModel:
 
         own_attractions, opp_attractions, beliefs = uniform_state()
 
-        all_beliefs  = np.full((T, n_belief_levels), np.nan)
-        all_bu       = np.full(T, np.nan)
-        all_probs    = np.zeros((T, self.N_ACTIONS))
-        all_cv       = np.zeros(T)
-        all_ape      = np.zeros(T)
+        all_beliefs       = np.full((T, n_belief_levels), np.nan)
+        all_bu            = np.full(T, np.nan)
+        all_probs         = np.zeros((T, self.N_ACTIONS))
+        all_cv            = np.zeros(T)
+        all_ape           = np.zeros(T)
+        all_own_attr      = np.full((T, self.N_ACTIONS), np.nan)  # pre-update, used for choice
+        all_opp_attr      = np.full((T, self.N_ACTIONS), np.nan)
 
         payoff_scaled = self.PAYOFF.copy()
         payoff_scaled[payoff_scaled == -1] *= lam
@@ -217,6 +241,11 @@ class CHASEModel:
 
             p_choice   = choices[t]
             opp_choice = opponent_choices[t]
+
+            # Snapshot attractions before update — these are what's used for
+            # the choice at trial t (matches Buergi's f_mat_bot(iTrial-1,:)).
+            all_own_attr[t] = own_attractions
+            all_opp_attr[t] = opp_attractions
 
             # ── Choice phase ─────────────────────────────────────────────────
             if kappa == 0:
@@ -274,12 +303,14 @@ class CHASEModel:
 
         result = CHASEResult(
             alpha=alpha, beta=beta, gamma=gamma, lam=lam, kappa=kappa,
-            beliefs       = all_beliefs,
-            belief_updates = all_bu,
-            action_probs   = all_probs,
-            choice_values  = all_cv,
-            ape            = all_ape,
-            inferred_level = inferred_level,
+            beliefs          = all_beliefs,
+            belief_updates   = all_bu,
+            action_probs     = all_probs,
+            choice_values    = all_cv,
+            ape              = all_ape,
+            inferred_level   = inferred_level,
+            own_attractions  = all_own_attr,
+            opp_attractions  = all_opp_attr,
         )
         return result
 
@@ -304,13 +335,22 @@ class CHASEModel:
         self,
         choices:          np.ndarray,
         opponent_choices: np.ndarray,
-        n_restarts:       int = 10,
+        optim_n_it:       int = 4,
         seed:             Optional[int] = None,
         trial_in_block:   Optional[np.ndarray] = None,
     ) -> CHASEResult:
         """
-        Fit CHASE parameters via maximum likelihood estimation.
-        Uses random restarts to avoid local minima.
+        Two-stage fitting matching Buergi et al. BAKR_2024_CHASE_config.m /
+        mn_fitModel.m:
+
+        Stage 1 — Cartesian grid (LL evaluation only, no optimisation):
+          5 values per continuous param → 5^4 = 625 combinations × each kappa.
+          Cheap: just a single forward pass per combination.
+
+        Stage 2 — Optimise from top-`optim_n_it` grid points per kappa:
+          Parameters are transformed to unconstrained estimation space
+          (logit for alpha, log for beta/gamma/lam) so the solver moves
+          freely without boundary artefacts — matches Buergi's fminunc call.
 
         Parameters
         ----------
@@ -318,8 +358,9 @@ class CHASEModel:
             Participant's choices, 0-indexed (0=Rock, 1=Paper, 2=Scissors).
         opponent_choices : np.ndarray, shape (T,)
             Opponent's choices, 0-indexed.
-        n_restarts : int
-            Number of random restarts.
+        optim_n_it : int
+            Top-N grid points per kappa to use as optimisation starting points
+            (default 4, matching Buergi's config.optim_n_it).
         trial_in_block : np.ndarray, shape (T,), optional
             1-indexed trial-within-block counter. If given, attractions and
             beliefs reset to uniform at the start of each new block (matches
@@ -329,8 +370,6 @@ class CHASEModel:
         -------
         CHASEResult with fitted parameters and trial-by-trial estimates.
         """
-        rng = np.random.default_rng(seed)
-
         # Convert external 1-indexed to 0-indexed if needed
         if choices.min() == 1:
             choices          = choices - 1
@@ -338,65 +377,52 @@ class CHASEModel:
 
         best_ll     = -np.inf
         best_params = None
-        best_res    = None
 
-        for restart in range(n_restarts):
-            # Random initial parameters within bounds
-            if restart == 0:
-                p0 = {k: v for k, v in PARAM_INIT.items()}
-            else:
-                p0 = {
-                    "alpha": rng.uniform(*PARAM_BOUNDS["alpha"]),
-                    "beta":  rng.uniform(*PARAM_BOUNDS["beta"]),
-                    "gamma": rng.uniform(*PARAM_BOUNDS["gamma"]),
-                    "lam":   rng.uniform(*PARAM_BOUNDS["lam"]),
-                    "kappa": rng.integers(0, self.max_kappa + 1),
-                }
+        # ── Stage 1: Cartesian grid LL evaluation ─────────────────────────────
+        # All 5^4 = 625 (alpha, beta, gamma, lam) combinations per kappa value.
 
-            # Optimise over continuous params (alpha, beta, gamma, lam)
-            # kappa is treated as a discrete grid search (0 = egocentric/non-strategic)
-            for kappa_try in range(0, self.max_kappa + 1):
-                p0["kappa"] = kappa_try
+        grid_combos = list(itertools.product(
+            GRID_VALUES["alpha"], GRID_VALUES["beta"],
+            GRID_VALUES["gamma"], GRID_VALUES["lam"],
+        ))
 
-                def neg_ll(x):
-                    params = {
-                        "alpha": x[0], "beta": x[1],
-                        "gamma": x[2], "lam":  x[3],
-                        "kappa": kappa_try,
-                    }
-                    return -self.log_likelihood(params, choices, opponent_choices, trial_in_block)
+        for kappa_try in range(self.max_kappa + 1):
 
-                x0     = [p0["alpha"], p0["beta"], p0["gamma"], p0["lam"]]
-                bounds = [
-                    PARAM_BOUNDS["alpha"], PARAM_BOUNDS["beta"],
-                    PARAM_BOUNDS["gamma"], PARAM_BOUNDS["lam"],
-                ]
+            grid_lls: list[tuple[float, float, float, float, float]] = []
+            for (a, b, g, l) in grid_combos:
+                params = {"alpha": a, "beta": b, "gamma": g, "lam": l, "kappa": kappa_try}
+                ll = self.log_likelihood(params, choices, opponent_choices, trial_in_block)
+                grid_lls.append((ll, a, b, g, l))
+
+            # Sort descending by LL; take top-N as optimisation starting points
+            grid_lls.sort(key=lambda t: -t[0])
+            top_starts = grid_lls[:optim_n_it]
+
+            # ── Stage 2: optimise in unconstrained estimation space ────────────
+
+            for ll_init, a0, b0, g0, l0 in top_starts:
+                x0 = _to_est(a0, b0, g0, l0)
+
+                def neg_ll_est(x, _k=kappa_try):
+                    return -self.log_likelihood(
+                        {**_from_est(x), "kappa": _k},
+                        choices, opponent_choices, trial_in_block,
+                    )
 
                 try:
                     opt = minimize(
-                        neg_ll, x0,
-                        method  = "L-BFGS-B",
-                        bounds  = bounds,
-                        options = {"maxiter": 500, "ftol": 1e-9},
+                        neg_ll_est, x0,
+                        method  = "BFGS",          # matches fminunc in MATLAB
+                        options = {"maxiter": 500, "gtol": 1e-6},
                     )
-                    if not opt.success:
-                        continue
-
-                    fitted = {
-                        "alpha": opt.x[0], "beta": opt.x[1],
-                        "gamma": opt.x[2], "lam":  opt.x[3],
-                        "kappa": kappa_try,
-                    }
+                    fitted = {**_from_est(opt.x), "kappa": kappa_try}
                     ll = self.log_likelihood(fitted, choices, opponent_choices, trial_in_block)
-
                     if ll > best_ll:
                         best_ll     = ll
                         best_params = fitted
-                        best_res    = opt
 
                 except Exception as e:
-                    warnings.warn(f"Optimisation failed (restart {restart}, kappa={kappa_try}): {e}")
-                    continue
+                    warnings.warn(f"Optimisation failed (kappa={kappa_try}, start={a0:.2f},{b0:.2f}): {e}")
 
         if best_params is None:
             warnings.warn("All optimisation restarts failed.")

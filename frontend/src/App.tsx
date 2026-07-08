@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { initJsPsych } from "jspsych";
 import { createSession, getRegistration, upsertRegistration, type RegistrationOut } from "./api";
 import { buildTimeline } from "./timeline";
+import { N_TRIALS, N_BLOCKS } from "./config";
 
 type Version = "behavioral" | "scanner";
 type TestMode = "test" | "full";
 
-const TRIALS_PER_BLOCK: Record<TestMode, number> = { test: 5, full: 40 };
+const TRIALS_PER_BLOCK: Record<TestMode, number> = { test: 5, full: N_TRIALS };
 
 export default function App() {
   const [participantId, setParticipantId] = useState("");
@@ -140,7 +141,7 @@ export default function App() {
             RPS Social Cognition
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Rock&ndash;Paper&ndash;Scissors Task &middot; 6 blocks &middot; 40 trials/block
+            Rock&ndash;Paper&ndash;Scissors Task &middot; {N_BLOCKS} blocks &middot; {N_TRIALS} trials/block
           </p>
         </div>
 
@@ -251,7 +252,7 @@ export default function App() {
                 onChange={() => setTestMode("full")}
                 className="h-4 w-4 accent-blue-600"
               />
-              Full (40 trials/block)
+              Full ({N_TRIALS} trials/block)
             </label>
           </div>
         </div>
