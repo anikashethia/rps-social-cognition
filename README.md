@@ -1,8 +1,8 @@
 # RPS Social Cognition Task
 
-A Rock-Paper-Scissors task for studying social cognition and mentalization. Participants play RPS across 8 blocks against agents they've had prior conversations with (in the companion chat task, split into friendly/neutral conditions) and control agents they haven't spoken with, while computational modeling (CHASE) captures trial-by-trial belief updating about opponent strategy.
+A Rock-Paper-Scissors task for studying social cognition and mentalization. Participants play RPS across 6 blocks against two agents they've had prior conversations with (one "friendly", one "neutral", assigned via IOS self-other overlap score from the companion chat task). Each agent plays at a different CHASE reasoning level per block (levels 0, 1, 2), counterbalanced across participants. Computational modeling (CHASE) captures trial-by-trial belief updating about opponent strategy.
 
-Based on the CHASE model from Buergi, Aydogan, Konovalov & Ruff (2026, *Nature Neuroscience*).
+Based on the CHASE model from Buergi, Aydogan, Konovalov & Ruff (2026, *Nature Neuroscience*). Bot behavior matches Buergi's `mn_RPS_task.m` exactly: same level-k reasoning hierarchy, same RW-freq attraction update rule, same adaptive WSLS noise structure.
 
 The task is a full-stack web app: a FastAPI backend (sessions, trials, scanner triggers, SQLite storage) and a React + jsPsych frontend.
 
@@ -12,6 +12,8 @@ The task is a full-stack web app: a FastAPI backend (sessions, trials, scanner t
 
 ```
 rps-social-cognition/
+├── config.py                   # Single source of truth for all Python constants
+│                               # (mirrors frontend/src/config.ts and Buergi's mn_RPS_config.m)
 ├── backend/
 │   ├── app/
 │   │   ├── main.py             # FastAPI entry point, CORS, routers
@@ -19,70 +21,31 @@ rps-social-cognition/
 │   │   ├── database.py         # SQLite engine/session setup
 │   │   ├── routers/            # sessions, trials, triggers, rotations endpoints
 │   │   └── rotations/
-│   │       └── rotation.json   # Counterbalanced avatar/condition rotation table (placeholder)
+│   │       └── rotation.json   # 6 counterbalanced block-order configs (2 agents × 3 CHASE levels)
 │   ├── rps.db                  # SQLite database — all session/trial/trigger data
 │   └── .env.example            # DATABASE_URL, FRONTEND_ORIGIN
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx             # Landing page: participant ID, mode, online/scanner launch
+│   │   ├── App.tsx             # Landing page: participant ID, mode, launch
 │   │   ├── timeline.ts         # jsPsych timeline builder (welcome → blocks → end)
-│   │   ├── agents.ts           # Social agent behavior (CHASE-based); all 8 agents share strategy — the manipulation is condition (friendly/neutral/control), not agent skill
+│   │   ├── agents.ts           # CHASEAgent bot: level-k reasoning + adaptive WSLS noise
 │   │   ├── api.ts              # Typed fetch wrappers for backend endpoints
+│   │   ├── config.ts           # Single source of truth for all TypeScript constants
+│   │   │                       # (twin of config.py — keep both in sync)
 │   │   ├── plugins/            # jsPsych plugins: RpsChoice, Feedback, Fixation
 │   │   └── index.css           # Styling — black intro screens, white task screens
-│   └── public/avatars/         # Avatar PNGs (16 placeholders, 2 sets × 4 ethnicities × 2 genders)
-├── analysis/
-│   ├── behavioral.py           # Model-free measures (win rate, entropy, WSLS)
-│   ├── model_fitting.py        # MLE fitting pipeline, AIC model comparison
-│   ├── parameter_recovery.py   # Simulation: how many trials/block for stable CHASE recovery?
-│   ├── belief_updates.py       # CHASE belief update timeseries utilities
-│   ├── data_io.py              # SQLite read helpers
-│   └── plots.py                # Figures (in progress)
+│   └── public/avatars/         # Avatar PNGs
 ├── models/
-│   ├── chase.py                # Full CHASE model
-│   └── alternatives.py         # RL, FP, EWA, EWA-S, ToMk (stubs)
-├── docs/
-│   └── task_design.md
-├── results/                    # Analysis outputs go here (gitignored)
-└── requirements.txt            # Python deps for analysis/ (numpy, pandas, scipy, matplotlib)
+│   └── chase.py                # CHASE participant model: simulate() + fit() with two-stage grid search
+├── analysis/
+│   ├── verify_agent.py         # Smoke test: runs one block of CHASEBot, checks output
+│   ├── parameter_recovery_new_design.py  # Recovery sim for 6-block 2-agent design
+│   ├── behavioral.py           # Model-free measures (win rate, entropy, WSLS)
+│   └── data_io.py              # SQLite read helpers
+├── reference/
+│   └── buergi_chase_matlab/    # Buergi et al.'s original MATLAB source (reference only)
+└── requirements.txt            # Python deps (numpy, pandas, scipy, matplotlib)
 ```
-
----
-
-## Ongoing Tasks
-
-### MRI Compatibility
-- [x] TR trigger sync (using F8) — verified in a live scanner-mode test: `tr_number` starts at 0 on the first pulse (the anchor), increments cleanly with no gaps/duplicates on repeated F8 presses
-- [x] Onset logging: every trial onset, response, and feedback event is logged with a session-local t_ms (`onset_ms`, `rt_ms`, `feedback_onset_ms` columns on `trials`)
-- [x] Jittered ITIs (uniform random, see `iti_min`/`iti_max` in `timeline.ts`)
-- [ ] Ensure current trial count and duration is around ~ 10 minutes or so — current Full-mode setting (35 trials × 8 blocks) runs ~42 minutes. Parameter recovery results point to **25 trials/block (~30–33 min total)** as the best tradeoff (see below) — still over the ~10 min target, but not yet changed in code pending final sign-off
-- [x] Ensure task is fully keyboard-operable (not mouse) — confirmed: every task screen uses jsPsych keyboard plugins or custom `keydown` listeners; the only mouse (`onClick`) handlers anywhere in the frontend are on the experimenter-facing landing page, not the task itself
-- [x] Event logging via SQLite DB: every trial logs onset t_ms, agent choice, outcome, and response time (see [Data output](#data-output) below)
-
-### Buergi paper / CHASE model
-- [ ] Confirm what output is needed for CHASE model and GLM
-- [x] Confirm trial count per block — **25 trials/block (~30–33 min total)** is the recommended setting; not yet applied in `timeline.ts` pending sign-off
-
-`models/chase.py` originally used a single shared "attraction" history for both players wherever it needed to predict opponent behavior at a given reasoning level. Cross-checking against Buergi et al.'s original MATLAB source (`reference/buergi_chase_matlab/`) confirmed the published model tracks **two separate histories** (`f_mat_own` / `f_mat_other`) — one updated from the participant's own choices, one from the opponent's — and seeds even/odd reasoning levels from each respectively. Fixed in `models/chase.py` and `analysis/parameter_recovery.py`.
-
-Parameter recovery (100 sims × 6 trial counts), before → after the fix:
-
-| n_trials | alpha | beta | gamma | **kappa** | lambda |
-|---|---|---|---|---|---|
-| 10 | 0.61 → 0.55 | 0.47 → 0.58 | 0.13 → 0.07 | 0.40 → **0.70** | 0.31 → 0.40 |
-| 15 | 0.55 → 0.50 | 0.53 → 0.69 | 0.05 → 0.10 | 0.38 → **0.54** | 0.06 → 0.33 |
-| 20 | 0.54 → 0.65 | 0.55 → 0.66 | 0.12 → 0.31 | 0.57 → **0.76** | 0.34 → 0.29 |
-| **25** | 0.76 → 0.76 | 0.64 → 0.57 | 0.06 → 0.33 | 0.61 → **0.84** | 0.30 → 0.39 |
-| 30 | 0.70 → 0.76 | 0.54 → 0.70 | 0.43 → 0.25 | 0.59 → **0.76** | 0.30 → 0.46 |
-| 40 | 0.58 → 0.54 | 0.65 → 0.71 | 0.20 → 0.30 | 0.53 → **0.79** | 0.30 → 0.31 |
-
-(Pearson r between true and recovered parameters; see `results/recovery/` for raw output, `results/recovery_pre_fix/` for the before-fix run.)
-
-- **kappa** — the parameter of primary interest — improved substantially (r=0.40–0.61 → r=0.70–0.84), with 25 trials/block now hitting r=0.84, 75% exact matches, 96% within one level.
-- **gamma** went from statistical noise to a weak-but-significant signal (still well short of the original paper's reported r=0.73–1.0 for all parameters).
-- **alpha**, **beta**, **lambda** all improved modestly and fairly consistently.
-
-Gamma and kappa's remaining ceiling is likely driven by task design, not implementation: in Buergi et al.'s task, the bot's reasoning level genuinely varies across blocks (0/1/2, rotated), giving `gamma` (sensitivity to evidence about the opponent's level) something real to track. In this task, every agent plays at a constant CHASE level 1 (`agents.ts`) — the manipulation here is social/friendliness framing, not opponent sophistication. Whether to introduce varying opponent levels (and how to do so without confounding it with the friendly/neutral/control conditions) is an open design question, not a code fix.
 
 ---
 
@@ -97,7 +60,7 @@ uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-This creates `rps.db` (SQLite) on first run and serves the API at `http://localhost:8000/api`.
+Creates `rps.db` (SQLite) on first run. API at `http://localhost:8000/api`.
 
 ### Frontend
 
@@ -110,72 +73,75 @@ npm run dev          # http://localhost:5173, proxies /api → http://localhost:
 ### Using the landing page
 
 1. Enter a **Participant ID**.
-2. Choose **Mode**: `Test` runs 5 trials per block (for quick local checks), `Full` runs 35 trials per block.
-3. Enter a **config index** (1–16, picks the avatar/condition rotation for that participant) and click **Start online version** or **Start scanner version**.
-   - Online and scanner versions are functionally identical except the scanner version waits for an F8 trigger before starting and anchors trial timing to it.
-4. Use keys **1**, **2**, **3** to play (Rock, Paper, Scissors) — the task is fully keyboard-operable.
+2. Choose **Mode**: `Test` (5 trials/block, quick dev check) or `Full` (40 trials/block, real session).
+3. Enter a **config index** (1–6, picks the block-order counterbalancing for that participant) and click **Start online version** or **Start scanner version**.
+   - Scanner version waits for an F8 trigger before starting and anchors trial timing to it.
+4. Use keys **1**, **2**, **3** to play (Rock, Paper, Scissors).
 
 ---
 
 ## Task design
 
-- **8 blocks** per participant: 4 agents the participant had a prior conversation with in the companion chat task (2 "friendly", 2 "neutral"), plus 4 "control" agents they haven't spoken with. Block order and avatar assignment come from `backend/app/rotations/rotation.json`, keyed by config index — the same config index always gets the same order for a given participant.
-- **35 trials per block** in Full mode. At current timing (4s response window + ITI jittered 0–6s + 2s feedback ≈ 9s/trial average), that's ~42 minutes total across 8 blocks — well over the ~10 minute MRI target (see Ongoing Tasks above). `Test` mode (5 trials/block, ~6 min total) is for local/dev checks only, not a real session length.
-- **Points**: +3 win, −3 lose, 0 draw, starting from 100
-- **Agents**: all 8 agents play at the same CHASE level (k=1) with calibrated noise — the friendly/neutral/control manipulation is social framing carried over from the chat task, not a difference in RPS strategy. There is no random/RNG baseline agent.
+- **6 blocks** per participant: one friendly agent and one neutral agent (assigned via IOS self-other overlap from the chat task), each played at CHASE levels 0, 1, and 2 across three blocks each.
+- **40 trials per block** in Full mode. At current timing (4s response window + ITI jittered 0–6s + 2s feedback ≈ 9s/trial average), that's ~36 minutes total.
+- **Points**: +1 win, −1 lose, 0 draw.
+- **Block order**: counterbalanced across 6 configs (`rotation.json`). All configs satisfy Buergi's constraints: first block is never level 2; no repeated level at the agent-boundary transition.
+- **Agents**: two agents per participant (friendly and neutral), each playing all three CHASE levels. Attractions accumulate continuously across all blocks for the same agent — no reset between blocks — matching Buergi's `mn_RPS_task.m`.
+
+---
+
+## Bot behavior (CHASEAgent)
+
+The bot (`frontend/src/agents.ts`) replicates Buergi et al.'s `mn_RPS_task.m` exactly:
+
+- **Level-k reasoning**: k=0 plays softmax over own attraction history; k=1 best-responds to the participant's attraction history (no initial softmax, matching CHASE paper); k=2 adds one more recursion.
+- **RW-freq attraction update**: dual trackers (`attr` for bot's own choices, `pAttr` for participant's choices), uniform initialization [1/3, 1/3, 1/3], delta rule with α=0.9. Accumulates continuously across all 6 blocks per agent.
+- **Adaptive WSLS noise**: bot goes "noisy" (beta drops from 10 → 1e-3) on lose/tie streaks or sustained win streaks, matching `get_noise_level()` in Buergi's code. Noise-breaker suppresses repeated noisy actions.
+- **Parameters** (from `config.py` / `config.ts`): α=0.9, β=10, λ=1.0, noise β=1e-3, time horizon=5, success criterion=0.5, skewness=1.3.
+- **Seeded RNG** (mulberry32): reproducible bot behavior per session.
+
+---
+
+## CHASE participant model (`models/chase.py`)
+
+Used post-hoc to fit participant behavior. Key implementation details:
+
+- **Two-stage fitting** matching Buergi's `mn_fitModel.m`: Cartesian grid search (5^4 = 625 combinations per kappa) to identify promising starting points, then BFGS optimization in transformed parameter space (logit for α, log for β/γ/λ).
+- **Parameter bounds**: α ∈ (0,1), β ∈ [0,100], γ ∈ [0.01,20], λ ∈ [0,100], κ ∈ {0,1,2,3,4}.
+- **Full attraction history**: `CHASEResult` contains `own_attractions` and `opp_attractions` as T×3 arrays — complete trial-by-trial record of both trackers, matching Buergi's `f_mat_own`/`f_mat_other`.
 
 ---
 
 ## Data output
 
-All session, trial, and trigger data is written directly to the SQLite database at `backend/rps.db` (no CSV download). Tables:
+All session, trial, and trigger data is written to `backend/rps.db` (SQLite). Writes happen incrementally per trial so data survives a mid-session browser crash.
 
 **`sessions`** — `id`, `participant_id`, `session_number`, `mode`, `config_index`, `created_at`, `anchor_t_ms`
 
-**`trials`** — `id`, `session_id`, `block`, `agent`, `trial_in_block`, `trial_global`, `participant_choice`, `agent_choice`, `outcome`, `points_delta`, `points_cumulative`, `rt_ms`, `onset_ms`, `feedback_onset_ms`, `iti_duration_ms`, `block_onset_ms`, `condition`
+**`trials`** — `id`, `session_id`, `block`, `agent`, `trial_in_block`, `trial_global`, `participant_choice`, `agent_choice`, `outcome`, `points_delta`, `points_cumulative`, `rt_ms`, `onset_ms`, `feedback_onset_ms`, `iti_duration_ms`, `block_onset_ms`, `condition`, `level`
 
-**`triggers`** — `id`, `session_id`, `tr_number`, `t_ms` (scanner TR pulses, scanner mode only)
+Per-trial bot state (for model validation and analysis):
+- `is_noisy` — was this a WSLS noisy trial?
+- `noise_trigger` — which streak triggered noise: `"lose"` / `"tie"` / `"win"` / `null`
+- `success_rate` — participant win rate over last 5 trials at time of noise decision
+- `noise_breaker` — did the noise-breaker suppress a repeated noisy action?
+- `bot_attr_r/p/s` — bot's own attraction vector [Rock, Paper, Scissors] before choice
+- `p_attr_r/p/s` — bot's estimate of participant's attraction vector before choice
+
+**`triggers`** — `id`, `session_id`, `tr_number`, `t_ms` (scanner TR pulses only)
 
 ### Clock model
 
-All three tables sit on **one shared, session-local clock** measured in milliseconds — not wall-clock time. In scanner mode, the instant the *first* F8 pulse is detected is `t = 0` (the anchor, stored as `sessions.anchor_t_ms = 0`); in online mode, the anchor is set as soon as the session starts running. Every later timestamp — a trial's `onset_ms`/`feedback_onset_ms`, or a trigger's `t_ms` — is just `performance.now() − anchor` at the moment it happens, sent to the backend, and stored with no further transformation. `feedback_onset_ms` is computed deterministically as `onset_ms + response_window_ms`, since the choice screen always holds for the full response window regardless of when (or whether) the participant responds.
-
-Because trial events and TR pulses share the same clock and the same zero point, aligning behavioral data to scanner pulses at analysis time is direct subtraction — no separate reconciliation step needed. `triggers.tr_number` is 0-indexed, so `tr_number = 0` is always the anchor pulse itself.
-
-Writes happen incrementally as the task runs (each trial/trigger is its own request) rather than being batched and sent at the end, so data already collected survives a browser crash mid-session.
+All timestamps are session-local milliseconds (`performance.now() − anchor`). In scanner mode, the first F8 pulse is `t = 0`; in online mode, the anchor is set at task start. Trial events and TR pulses share the same zero point, so aligning behavioral data to scanner pulses is direct subtraction. `feedback_onset_ms` is computed as `onset_ms + response_window_ms` (deterministic — the choice screen always holds for the full response window).
 
 ---
 
-## Analysis
+## MRI compatibility
 
-Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-**Behavioral (model-free):**
-```bash
-python analysis/behavioral.py --db_path backend/rps.db --output_dir results/behavioral/
-```
-Computes win rate, choice entropy, win-stay/lose-shift, and lag-1 autocorrelation per participant × agent block, plus a monotonic gradient test (friendly > neutral > control).
-
-**Model fitting (CHASE + alternatives):**
-```bash
-python analysis/model_fitting.py --db_path backend/rps.db --output_dir results/models/ --model chase,rl,fp
-```
-Fits models via MLE with random restarts, outputs per-participant parameters, trial-level CHASE estimates (belief updates, APE, choice values), and AIC model comparison.
-
-**Parameter recovery (how many trials/block are needed?):**
-```bash
-python -m analysis.parameter_recovery --n_sims 100 --output_dir results/recovery/
-```
-Simulates synthetic CHASE data at trial counts `[10, 15, 20, 25, 30, 40]`, fits CHASE back to it, and reports recovery correlation/RMSE per parameter — used to decide the real trial count per block. Must be run as a module (`python -m analysis.parameter_recovery`, not `python analysis/parameter_recovery.py`) so `models/` is importable from repo root.
-
----
-
-## Avatar images
-
-Avatars live in `frontend/public/avatars/` and are referenced directly by filename (e.g. `s1f1.png`) from the rotation config — no separate path config needed. The current set is 16 placeholders (`s{1,2}{f,m}{1-4}.png`, 2 sets × 2 genders × 4 ethnicities — see `backend/app/rotations/rotation.json` for the naming convention) and will be replaced once the mentor's finalized rotation table is ready.
+- [x] TR trigger sync (F8) — `tr_number` starts at 0 on first pulse, increments cleanly
+- [x] Onset logging — `onset_ms`, `rt_ms`, `feedback_onset_ms`, `block_onset_ms` per trial
+- [x] Jittered ITIs (uniform random within `iti_min`/`iti_max` per mode)
+- [x] Fully keyboard-operable — all task screens use jsPsych keyboard plugins; mouse handlers only on the experimenter landing page
 
 ---
 
