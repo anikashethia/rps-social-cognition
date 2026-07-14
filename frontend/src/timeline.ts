@@ -95,12 +95,13 @@ function waitingForScannerHTML(): string {
 
 function blockIntroHTML(block: BlockConfig, blockNum: number, totalBlocks: number): string {
   const pct = (((blockNum - 1) / totalBlocks) * 100).toFixed(0);
+  const name = block.avatar_id.split("_").pop()!.replace(/^\w/, c => c.toUpperCase());
   return `
     <div class="screen">
       <div class="tag">Block ${blockNum} of ${totalBlocks}</div>
       ${avatarHTML(block.avatar_id, 160)}
-      <div class="agent-name">Player 1</div>
-      <div class="body-text">You will now play against <strong>Player 1</strong>.</div>
+      <div class="agent-name">${name}</div>
+      <div class="body-text">You will now play against <strong>${name}</strong>.</div>
       <div class="progress-wrap">
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
         <div class="progress-label">${blockNum - 1} / ${totalBlocks} blocks done</div>
@@ -260,7 +261,7 @@ export async function buildTimeline(
       timeline.push({
         type: RpsChoicePlugin,
         agent_id: block.avatar_id,
-        agent_name: "Player 1",
+        agent_name: block.avatar_id.split("_").pop()!.replace(/^\w/, c => c.toUpperCase()),
         response_window_ms: timings.response_window,
         onset_ms: () => performance.now() - sessionAnchorMs,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
