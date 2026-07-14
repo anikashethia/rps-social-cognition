@@ -58,18 +58,21 @@ class RpsChoicePlugin implements JsPsychPlugin<Info> {
         />
         <div class="agent-name">${agentName}</div>
         <div class="choice-prompt">choose your move</div>
-        <div class="choice-row">
-          <button class="choice-btn" data-choice="1">
+        <div class="choice-circle">
+          <svg class="choice-ring" viewBox="0 0 380 340" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="190" cy="180" r="130" fill="none" stroke="#e2e8f0" stroke-width="1.5"/>
+          </svg>
+          <button class="choice-btn choice-btn--1" data-choice="1">
             <span class="ci">🪨</span>
             <span class="cn">Rock</span>
             <span class="ck">1</span>
           </button>
-          <button class="choice-btn" data-choice="2">
+          <button class="choice-btn choice-btn--2" data-choice="2">
             <span class="ci">📄</span>
             <span class="cn">Paper</span>
             <span class="ck">2</span>
           </button>
-          <button class="choice-btn" data-choice="3">
+          <button class="choice-btn choice-btn--3" data-choice="3">
             <span class="ci">✂️</span>
             <span class="cn">Scissors</span>
             <span class="ck">3</span>

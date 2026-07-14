@@ -244,6 +244,9 @@ export async function buildTimeline(
       const itiMs = Math.floor(
         Math.random() * (timings.iti_max - timings.iti_min) + timings.iti_min,
       );
+      const postResponseMs = Math.floor(
+        Math.random() * (timings.post_response_max - timings.post_response_min) + timings.post_response_min,
+      );
 
       timeline.push({
         type: FixationPlugin,
@@ -290,7 +293,7 @@ export async function buildTimeline(
             points_cumulative: points,
             rt_ms: (data.rt_ms as number | null) ?? null,
             onset_ms: data.onset_ms as number,
-            feedback_onset_ms: (data.onset_ms as number) + timings.response_window,
+            feedback_onset_ms: (data.onset_ms as number) + timings.response_window + postResponseMs,
             iti_duration_ms: lastItiMs,
             block_onset_ms: currentBlockOnsetMs,
             condition: block.condition,
@@ -309,6 +312,12 @@ export async function buildTimeline(
 
           updateHUD(blockNum, totalBlocks, points);
         },
+      });
+
+      // Post-response jitter: blank screen for 100–2000ms before feedback (Buergi: (3−RT) + 0.1–2s)
+      timeline.push({
+        type: FixationPlugin,
+        duration_ms: postResponseMs,
       });
 
       timeline.push({

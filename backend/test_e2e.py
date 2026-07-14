@@ -71,8 +71,8 @@ def check(label: str, condition: bool, detail: str = ""):
 # ── Test data ─────────────────────────────────────────────────────────────────
 
 PARTICIPANT_ID    = "TEST001"
-FRIENDLY_AVATAR   = "s1f1"
-NEUTRAL_AVATAR    = "s1m3"
+FRIENDLY_AVATAR   = "r1_f_quinn"
+NEUTRAL_AVATAR    = "r1_m_alex"
 
 
 # ── 1. Health check ───────────────────────────────────────────────────────────

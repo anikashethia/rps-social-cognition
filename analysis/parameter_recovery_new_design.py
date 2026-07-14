@@ -1,32 +1,26 @@
 """
-Parameter recovery for the new 6-block study design.
+Parameter recovery for the new study design — per-agent fitting.
 
-Design: 2 agents (friendly + neutral) × 3 CHASE levels (0, 1, 2) = 6 blocks,
-        40 trials/block, random block order (Buergi et al. constraints).
+Design: 1 agent × 3 CHASE levels (0, 1, 2) = 3 blocks × 40 trials = 120 trials.
+CHASE is fit separately per agent (friendly and neutral), matching the analysis
+plan: compare kappa between conditions.
 
 For each simulation:
   1. Sample ground-truth CHASE parameters (alpha, beta, gamma, lam, kappa)
-  2. Generate a random 6-block order
+  2. Generate a random 3-block order for one agent (levels 0, 1, 2)
   3. Run the CHASEBot at each block's level to produce opponent choices
   4. Run the CHASE generative model (with ground-truth params) to produce
-     participant choices, resetting state at each block boundary
+     participant choices, resetting attractions at each block boundary
   5. Fit CHASE (with block resets) to recover parameters
   6. Report Pearson r per parameter and compare to Buergi's published values
 
-Key differences from the old parameter_recovery.py:
-  - Opponent is CHASEBot (alpha=0.9, beta=10, WSLS noise, dual-tracker)
-    at the level assigned to each block -- not a fixed level-1 agent
-  - Block structure: 6 blocks × 40 trials, not variable trial counts
-  - kappa={0,1,2,3,4} (includes egocentric case)
-  - trial_in_block passed to fit() so the model resets between blocks
-  - NaN masking: gamma excluded where fitted kappa<2; lam excluded where kappa=0
-
-Run from repo root (takes ~1 hour for 200 sims):
+Run from repo root:
   python3 analysis/parameter_recovery_new_design.py
   python3 analysis/parameter_recovery_new_design.py --n_sims 50  # quick check
 """
 
 import argparse
+import multiprocessing as mp
 import os
 import random
 import sys
@@ -48,9 +42,10 @@ warnings.filterwarnings("ignore")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-N_SIMS_DEFAULT = 200  # simulations (40 per kappa level × 5 levels)
-N_RESTARTS     = 1   # ~24s/sim → ~80 min total; increase for better fits at cost of time
-# N_BLOCKS and N_TRIALS_PER_BLOCK imported from config
+N_SIMS_DEFAULT  = 200   # simulations (40 per kappa level × 5 levels)
+N_RESTARTS      = 4    # optim_n_it: top-N grid points passed to BFGS (matches Buergi default)
+N_BLOCKS_AGENT  = 3    # blocks per agent (one permutation of levels 0, 1, 2)
+# N_TRIALS_PER_BLOCK imported from config (40)
 ALL_PARAMS        = ["alpha", "beta", "gamma", "lam", "kappa"]
 
 BUERGI_R = {"alpha": 0.80, "beta": 0.88, "lam": 0.86, "gamma": 0.73, "kappa": 1.00}
@@ -147,27 +142,19 @@ class CHASEBot:
             self.scores.append(score)
 
 
-# ── Block order (mirrors backend/app/routers/sessions.py) ─────────────────────
+# ── Block order ───────────────────────────────────────────────────────────────
 
 def generate_block_order(seed: int) -> list[dict]:
     """
-    Random 6-block order: all (condition, level) combos exactly once,
-    first block not level 2, no two consecutive blocks share a level.
+    Random 3-block order for one agent: levels 0, 1, 2 in a random permutation
+    that doesn't start with level 2 (Buergi et al. constraint).
     """
     rng = random.Random(seed)
-    all_blocks = [
-        {"condition": c, "level": l}
-        for c in ("friendly", "neutral")
-        for l in (0, 1, 2)
-    ]
+    levels = [0, 1, 2]
     while True:
-        blocks = all_blocks.copy()
-        rng.shuffle(blocks)
-        if blocks[0]["level"] >= 2:
-            continue
-        if any(blocks[i]["level"] == blocks[i + 1]["level"] for i in range(5)):
-            continue
-        return blocks
+        rng.shuffle(levels)
+        if levels[0] < 2:
+            return [{"level": l} for l in levels]
 
 
 # ── Generative model ──────────────────────────────────────────────────────────
@@ -186,9 +173,9 @@ def generate_session(
 
     Returns
     -------
-    p_choices    : (240,) participant choices, 0-indexed
-    opp_choices  : (240,) opponent choices, 0-indexed
-    trial_in_block : (240,) 1-indexed trial-within-block counter
+    p_choices    : (120,) participant choices, 0-indexed
+    opp_choices  : (120,) opponent choices, 0-indexed
+    trial_in_block : (120,) 1-indexed trial-within-block counter
     """
     model = CHASEModel()
     rng   = np.random.default_rng(seed)
@@ -280,9 +267,9 @@ def run_single(sim_id: int, kappa: int, rng: np.random.Generator) -> dict | None
 
     model  = CHASEModel()
     result = model.fit(
-        p_choices   + 1,   # convert to 1-indexed for model.fit()
-        opp_choices + 1,
-        n_restarts     = N_RESTARTS,
+        p_choices,
+        opp_choices,
+        optim_n_it     = N_RESTARTS,
         seed           = seed,
         trial_in_block = tib,
     )
@@ -297,50 +284,57 @@ def run_single(sim_id: int, kappa: int, rng: np.random.Generator) -> dict | None
     return row
 
 
-# ── Main simulation loop ──────────────────────────────────────────────────────
+# ── Main simulation loop (parallelized) ──────────────────────────────────────
 
-def run_simulation(n_sims: int, seed: int, output_dir: str) -> pd.DataFrame:
+def _worker(args: tuple) -> dict | None:
+    """Top-level function required for multiprocessing pickling."""
+    sim_id, kappa, seed = args
+    rng = np.random.default_rng(seed)
+    return run_single(sim_id, kappa, rng)
+
+
+def run_simulation(n_sims: int, seed: int, output_dir: str, n_workers: int) -> pd.DataFrame:
     os.makedirs(output_dir, exist_ok=True)
-    rng       = np.random.default_rng(seed)
-    rows      = []
-    kappa_vals = [0, 1, 2, 3, 4]
+    kappa_vals     = [0, 1, 2, 3, 4]
     sims_per_kappa = n_sims // len(kappa_vals)
-    total     = sims_per_kappa * len(kappa_vals)
+    total          = sims_per_kappa * len(kappa_vals)
 
-    print(f"Design:  {N_BLOCKS} blocks × {N_TRIALS_PER_BLOCK} trials = "
-          f"{N_BLOCKS * N_TRIALS_PER_BLOCK} trials/participant")
-    print(f"Sims:    {sims_per_kappa} per kappa level × {len(kappa_vals)} levels = {total}")
-    print(f"Fitting: {N_RESTARTS} random restarts per sim\n")
+    # Build job list: each job gets a unique seed derived from the master seed
+    master_rng = np.random.default_rng(seed)
+    jobs = [
+        (kappa * sims_per_kappa + i, kappa, int(master_rng.integers(0, 2**31)))
+        for kappa in kappa_vals
+        for i in range(sims_per_kappa)
+    ]
+
+    print(f"Design:   {N_BLOCKS_AGENT} blocks × {N_TRIALS_PER_BLOCK} trials = "
+          f"{N_BLOCKS_AGENT * N_TRIALS_PER_BLOCK} trials/agent (fit separately per agent)")
+    print(f"Sims:     {sims_per_kappa} per kappa level × {len(kappa_vals)} levels = {total}")
+    print(f"Fitting:  optim_n_it={N_RESTARTS} (top-N grid points passed to BFGS)")
+    print(f"Workers:  {n_workers} parallel processes\n")
 
     t0   = time.time()
+    rows = []
     done = 0
 
-    for kappa in kappa_vals:
-        converged = 0
-        for i in range(sims_per_kappa):
-            sim_id = kappa * sims_per_kappa + i
-            row    = run_single(sim_id, kappa, rng)
+    with mp.Pool(processes=n_workers) as pool:
+        for row in pool.imap_unordered(_worker, jobs):
             if row is not None:
                 rows.append(row)
-                converged += 1
             done += 1
-
             if done % 10 == 0 or done == total:
                 elapsed   = time.time() - t0
                 rate      = elapsed / done
                 remaining = rate * (total - done)
-                print(f"  {done:3d}/{total}  kappa={kappa}  "
-                      f"converged={converged}/{i+1}  "
+                print(f"  {done:3d}/{total}  converged={len(rows)}  "
                       f"elapsed={elapsed/60:.1f}min  "
                       f"remaining≈{remaining/60:.1f}min",
                       flush=True)
 
-        print(f"  kappa={kappa}: {converged}/{sims_per_kappa} converged\n")
-
     df = pd.DataFrame(rows)
     out_csv = os.path.join(output_dir, "recovery_new_design.csv")
     df.to_csv(out_csv, index=False)
-    print(f"Raw results → {out_csv}")
+    print(f"\nRaw results → {out_csv}")
     return df
 
 
@@ -398,8 +392,8 @@ def analyse_and_plot(df: pd.DataFrame, output_dir: str):
         print(f"  {param:<6}  {r_str:>6}  {n:>5}  {buergi_r:>9.2f}")
 
     fig.suptitle(
-        f"Parameter recovery — new 6-block design "
-        f"({N_BLOCKS} blocks × {N_TRIALS_PER_BLOCK} trials, n={len(df)})",
+        f"Parameter recovery — per-agent fit "
+        f"({N_BLOCKS_AGENT} blocks × {N_TRIALS_PER_BLOCK} trials = 120 trials/agent, n={len(df)})",
         fontsize=12,
     )
     plt.tight_layout()
@@ -448,8 +442,10 @@ if __name__ == "__main__":
                         help="Total simulations (split evenly across kappa 0-4). Default: 200")
     parser.add_argument("--output_dir", default="results/recovery_new_design/")
     parser.add_argument("--seed",       type=int, default=42)
+    parser.add_argument("--n_workers",  type=int, default=max(1, mp.cpu_count() - 1),
+                        help="Parallel worker processes. Default: cpu_count-1")
     args = parser.parse_args()
 
-    df = run_simulation(args.n_sims, args.seed, args.output_dir)
+    df = run_simulation(args.n_sims, args.seed, args.output_dir, args.n_workers)
     analyse_and_plot(df, args.output_dir)
     print("\nDone.")

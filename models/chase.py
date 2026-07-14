@@ -370,8 +370,10 @@ class CHASEModel:
         -------
         CHASEResult with fitted parameters and trial-by-trial estimates.
         """
-        # Convert external 1-indexed to 0-indexed if needed
-        if choices.min() == 1:
+        # Normalise to 0-indexed (accept either 0- or 1-indexed input)
+        choices          = np.asarray(choices, dtype=int)
+        opponent_choices = np.asarray(opponent_choices, dtype=int)
+        if choices.min() >= 1:
             choices          = choices - 1
             opponent_choices = opponent_choices - 1
 

@@ -51,11 +51,13 @@ export const TIMINGS: Record<Mode, {
   iti_min: number;
   iti_max: number;
   response_window: number;
+  post_response_min: number;
+  post_response_max: number;
   feedback: number;
 }> = {
-  dev:        { trials: 5,  iti_min: 0,    iti_max: 1000, response_window: 4000, feedback: 2000 },
-  behavioral: { trials: 40, iti_min: 0,    iti_max: 6000, response_window: 4000, feedback: 2000 },
-  scanner:    { trials: 40, iti_min: 1000, iti_max: 3000, response_window: 4000, feedback: 2000 },
+  dev:        { trials: 5,  iti_min: 0,    iti_max: 1000, response_window: 3000, post_response_min: 100, post_response_max: 2000, feedback: 2000 },
+  behavioral: { trials: 40, iti_min: 0,    iti_max: 6000, response_window: 3000, post_response_min: 100, post_response_max: 2000, feedback: 2000 },
+  scanner:    { trials: 40, iti_min: 0,    iti_max: 6000, response_window: 3000, post_response_min: 100, post_response_max: 2000, feedback: 2000 },
 } as const;
 
 // ── Points (display) ─────────────────────────────────────────────────────────

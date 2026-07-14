@@ -198,7 +198,7 @@ export default function App() {
                       type="text"
                       value={friendlyId}
                       onChange={(e) => setFriendlyId(e.target.value)}
-                      placeholder="e.g. s1f1"
+                      placeholder="e.g. r1_f_quinn"
                       className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     />
                   </div>
@@ -208,7 +208,7 @@ export default function App() {
                       type="text"
                       value={neutralId}
                       onChange={(e) => setNeutralId(e.target.value)}
-                      placeholder="e.g. s1m3"
+                      placeholder="e.g. r1_m_alex"
                       className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     />
                   </div>
