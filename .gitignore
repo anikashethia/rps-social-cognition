@@ -14,3 +14,13 @@ dist/
 *.db
 .env
 .venv/
+
+# Analysis outputs (large binary/data files — store locally)
+analysis/*.mat
+analysis/ts_probs.json
+analysis/matlab_probs.json
+analysis/recovery_input.csv
+analysis/buergi_export.csv
+
+# TypeScript build artifacts
+frontend/tsconfig.tsbuildinfo
